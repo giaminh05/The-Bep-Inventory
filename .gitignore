@@ -1,0 +1,13 @@
+node_modules/
+data/
+dist/
+.idea/
+*.iml
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.mobileprovision

@@ -1,0 +1,10 @@
+{
+  "appId": "com.thebepteahouse.inventory",
+  "appName": "The Bếp Inventory",
+  "webDir": "dist",
+  "server": {
+    "url": "http://127.0.0.1:4170",
+    "appStartPath": "/staff",
+    "cleartext": true
+  }
+}
