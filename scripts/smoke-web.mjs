@@ -31,10 +31,72 @@ try {
     await page.getByRole('heading', { name: username === 'manager' ? 'Tồn kho' : 'Phiếu kiểm kê', exact: true }).waitFor();
   }
 
+  for (const width of [390, 320]) {
+    const managerPhone = await browser.newPage({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
+    await login(managerPhone, 'manager');
+    const nav = managerPhone.getByRole('navigation', { name: 'Chức năng kho' });
+    const active = nav.locator('[aria-current="page"]');
+    const assertActiveTabVisible = async () => assert.deepEqual(await active.evaluate(tab => {
+      const scroller = tab.closest('nav');
+      const bounds = scroller.getBoundingClientRect();
+      const button = tab.getBoundingClientRect();
+      return { tabVisible: button.left >= bounds.left - 1 && button.right <= bounds.right + 1,
+        pageFits: document.documentElement.scrollWidth === innerWidth };
+    }), { tabVisible: true, pageFits: true });
+    await managerPhone.getByText('Cuộn ngang để xem thêm tab').waitFor();
+    const touch = await managerPhone.context().newCDPSession(managerPhone);
+    const { x, y, width: navWidth, height } = await nav.boundingBox();
+    const point = offset => ({ x: Math.round(x + navWidth * offset), y: Math.round(y + height / 2) });
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point(.85)] });
+    for (const offset of [.7, .55, .4, .25]) {
+      await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [point(offset)] });
+    }
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await managerPhone.waitForFunction(() => document.querySelector('[data-manager-nav]').scrollLeft > 0);
+    await touch.detach();
+
+    for (const title of ['Phiếu kiểm kê', 'Đơn giao', 'Chuyển kho', 'Nhật ký', 'Báo cáo tuần', 'Tồn kho']) {
+      await nav.getByRole('button', { name: title, exact: true }).tap();
+      await managerPhone.getByRole('heading', { name: title, exact: true }).waitFor();
+      await assertActiveTabVisible();
+    }
+    await nav.getByRole('button', { name: 'Nhật ký', exact: true }).focus();
+    await managerPhone.keyboard.press('Tab');
+    await managerPhone.keyboard.press('Enter');
+    await managerPhone.getByRole('heading', { name: 'Giá trị tồn hiện tại', exact: true }).waitFor();
+    assert.equal(await active.evaluate(tab => tab === document.activeElement && tab.textContent === 'Báo cáo tuần'), true);
+    await assertActiveTabVisible();
+    const renderedNav = await nav.elementHandle();
+    await managerPhone.getByRole('button', { name: 'Làm mới' }).tap();
+    await renderedNav.waitForElementState('hidden');
+    await assertActiveTabVisible();
+
+    await nav.getByRole('button', { name: 'Phiếu kiểm kê', exact: true }).tap();
+    const place = managerPhone.getByRole('combobox', { name: 'Lọc địa điểm' });
+    await place.selectOption('duluth');
+    await managerPhone.locator('#count-category').selectOption('Trà');
+    await managerPhone.getByLabel('Số đếm Trà xanh').fill('0');
+    if (width === 320) {
+      await managerPhone.evaluate(() => localStorage.removeItem(JSON.stringify(['bep-count-draft', '', 'green-tea', 'manager'])));
+    }
+    await managerPhone.reload();
+    await managerPhone.getByRole('heading', { name: 'Phiếu kiểm kê', exact: true }).waitFor();
+    assert.equal(await place.inputValue(), 'duluth');
+    assert.equal(await managerPhone.locator('#count-category').inputValue(), 'Trà');
+    assert.equal(await managerPhone.getByLabel('Số đếm Trà xanh').inputValue(), '0');
+    await place.selectOption('norcross');
+    assert.equal(await managerPhone.locator('#count-category').inputValue(), '');
+    await place.selectOption('duluth');
+    assert.equal(await managerPhone.getByLabel('Số đếm Trà xanh').inputValue(), '0');
+    await managerPhone.close();
+  }
+
   await login(desktop, 'manager');
   const locationFilter = desktop.getByRole('combobox', { name: 'Lọc địa điểm' });
   assert.equal(await locationFilter.locator('option').count(), 6);
   assert.equal(await desktop.locator('.stock-table tbody tr').count(), 3);
+  assert.equal(await desktop.locator('[data-list-pages]:visible').count(), 0);
+  assert.equal(await desktop.locator('.nav-scroll-hint').isVisible(), false);
   await desktop.getByRole('row').filter({ hasText: 'Trà xanh' }).getByText('108', { exact: true }).waitFor();
   const tapiocaTotal = desktop.getByRole('row').filter({ hasText: 'Trân châu' });
   await tapiocaTotal.getByText('65', { exact: true }).waitFor();
@@ -53,6 +115,16 @@ try {
   assert.equal(await phone.getByRole('button', { name: 'Đặt ngưỡng' }).count(), 0);
   assert.equal(await phone.getByRole('button', { name: 'Tồn kho', exact: true }).count(), 0);
   assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth === innerWidth), true);
+  await phone.evaluate(() => {
+    const scope = ['bep-count-draft', '', 'green-tea', 'duluth'];
+    localStorage.setItem(JSON.stringify(scope), JSON.stringify({ place: 'duluth', category: 'Nhóm đã xóa' }));
+    const draft = JSON.stringify({ values: { 'green-tea': { quantity: '12', unit: 'bag', revision: 0 } } });
+    localStorage.setItem(JSON.stringify([...scope, 'duluth', 'Nhóm đã xóa']), draft);
+    localStorage.setItem(JSON.stringify([...scope, 'norcross', 'Trà']), draft);
+    localStorage.setItem(JSON.stringify([...scope, 'duluth', 'Topping']), draft);
+  });
+  await phone.reload();
+  assert.equal(await phone.locator('#count-category').inputValue(), '');
   await phone.locator('#count-category').selectOption('Topping');
   await phone.getByLabel('Đơn vị đếm Trân châu').selectOption('case');
   await phone.getByLabel('Số đếm Trân châu').fill('1');
@@ -88,16 +160,37 @@ try {
   await locationFilter.selectOption('duluth');
 
   await phone.getByRole('button', { name: 'Phiếu kiểm kê', exact: true }).click();
+  await phone.locator('#count-category').selectOption('Bao bì');
+  await phone.getByLabel('Số đếm Ly 23 oz').fill('900');
   await phone.locator('#count-category').selectOption('Trà');
   await phone.getByLabel('Số đếm Trà xanh').fill('29');
   await phone.getByLabel('Người kiểm kê').fill('Nhân viên thử');
   await phone.reload();
-  await phone.getByRole('button', { name: 'Phiếu kiểm kê', exact: true }).click();
-  await phone.locator('#count-category').selectOption('Trà');
+  assert.equal(await phone.locator('#count-category').inputValue(), 'Trà');
   assert.equal(await phone.getByLabel('Số đếm Trà xanh').inputValue(), '29');
+  assert.equal(await phone.locator('[data-list-pages]:visible').count(), 0);
+  const sentCounts = [];
+  await phone.route('**/api/count-sheets', async route => {
+    const { category } = route.request().postDataJSON();
+    const key = route.request().headers()['idempotency-key'];
+    sentCounts.push({ category, key });
+    if (category === 'Bao bì' && sentCounts.length === 2) {
+      assert.equal((await route.fetch()).ok(), true);
+      await route.abort();
+    } else await route.continue();
+  });
   await phone.getByRole('button', { name: 'Kiểm tra và gửi' }).click();
+  await phone.getByRole('dialog').getByText('Duluth · 2 nhóm đã đếm').waitFor();
   await phone.getByRole('button', { name: 'Gửi kiểm kê', exact: true }).click();
-  await phone.getByText('Nhân viên thử', { exact: false }).waitFor();
+  await phone.getByRole('dialog').getByText(/Đã gửi 1\/2 nhóm. Nhóm Bao bì/).waitFor();
+  assert.equal(await phone.getByLabel('Số đếm Trà xanh').inputValue(), '');
+  await phone.getByRole('button', { name: 'Thử lại lần lưu này' }).click();
+  await phone.getByText('Đã gửi 2 phiếu và cập nhật tồn.').waitFor();
+  await phone.getByText(/Nhân viên thử.*1 đã đếm/).first().waitFor();
+  assert.deepEqual(sentCounts.map(request => request.category), ['Trà', 'Bao bì', 'Bao bì']);
+  assert.equal(sentCounts[1].key, sentCounts[2].key);
+  assert.equal(await phone.locator('.count-history summary').filter({ hasText: 'Nhân viên thử' }).count(), 2);
+  await phone.unroute('**/api/count-sheets');
 
   await desktop.getByRole('button', { name: 'Đơn giao', exact: true }).click();
   await desktop.getByRole('button', { name: 'Làm mới' }).click();
@@ -180,8 +273,12 @@ try {
   await desktop.getByRole('button', { name: 'Sau', exact: true }).click();
   assert.equal(await desktop.locator('.stock-table tbody tr:visible').count(), 5);
   await desktop.getByLabel('Tìm mặt hàng').fill('mat hang 22');
-  await desktop.getByText('1–1 / 1', { exact: true }).waitFor();
   assert.equal(await desktop.locator('.stock-table tbody tr:visible').count(), 1);
+  assert.equal(await desktop.locator('[data-list-pages]:visible').count(), 0);
+  await desktop.getByLabel('Tìm mặt hàng').fill('khong co mat hang nay');
+  await desktop.getByText('Không có kết quả', { exact: true }).waitFor();
+  assert.equal(await desktop.locator('[data-list-pages]:visible').count(), 0);
+  assert.equal(await desktop.locator('.stock-table tbody tr:visible').count(), 0);
 
   await desktop.getByRole('button', { name: 'Đơn giao', exact: true }).click();
   await desktop.getByRole('button', { name: 'Tạo đơn giao', exact: true }).click();
@@ -229,7 +326,7 @@ try {
   await phone.getByLabel('Số đếm Siro thử').fill('1');
   await phone.getByLabel('Người kiểm kê').fill('Nhân viên quy đổi');
   await phone.reload();
-  await phone.locator('#count-category').selectOption('Syrup');
+  assert.equal(await phone.locator('#count-category').inputValue(), 'Syrup');
   assert.equal(await phone.getByLabel('Đơn vị đếm Siro thử').inputValue(), 'case');
   await phone.getByRole('button', { name: 'Kiểm tra và gửi' }).click();
   await phone.getByRole('button', { name: 'Gửi kiểm kê', exact: true }).click();
@@ -251,7 +348,7 @@ try {
   assert.equal(await brand.textContent(), 'The Bếp Teahouse');
   assert.match(await brand.evaluate(node => getComputedStyle(node).fontFamily), /Segoe UI/);
   assert.deepEqual(errors, []);
-  console.log('PASS stock, alerts, receipt, transfer, valuation, invoices, item forms, staff drafts and offline recovery.');
+  console.log('PASS mobile navigation, draft restoration, multi-group retry, pagination, stock, alerts, receipts, transfers and offline recovery.');
 } finally {
   await browser?.close();
   await new Promise(resolve => server.close(resolve));

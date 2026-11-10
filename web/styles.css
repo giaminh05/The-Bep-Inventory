@@ -39,6 +39,7 @@ small { display: block; }
 .sidebar nav { display: grid; gap: .35rem; }
 .sidebar nav button { display: flex; align-items: center; gap: .7rem; text-align: left; padding: .7rem .8rem; border-radius: 8px; color: #e9f3ec; border: 0; background: transparent; white-space: nowrap; }
 .sidebar nav button:hover, .sidebar nav button[aria-current="page"] { background: #315744; }
+.nav-scroll-hint { display: none; }
 .sidebar .account { margin-top: auto; padding: 1rem .35rem 0; border-top: 1px solid #52705f; }
 .account small { color: #d4e3d7; margin-top: .2rem; }
 .account button { border: 0; background: none; padding: 0; color: inherit; text-decoration: underline; }
@@ -147,6 +148,9 @@ dialog img { display: block; max-width: 100%; max-height: 65vh; margin: .7rem au
   .shell { display: block; }
   .sidebar, .staff .sidebar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .55rem; padding: .7rem .85rem; padding-top: max(.7rem, env(safe-area-inset-top)); }
   .sidebar nav { grid-row: 2; grid-column: 1 / -1; display: flex; overflow-x: auto; }
+  .sidebar [data-manager-nav] { min-width: 0; padding: .25rem; }
+  .sidebar [data-manager-nav] button { flex: 0 0 auto; }
+  .sidebar .nav-scroll-hint { display: block; grid-row: 3; grid-column: 1 / -1; color: #d4e3d7; }
   .sidebar .account { border: 0; padding: 0; align-self: center; text-align: right; }
   .account > strong, .account > small { display: none; }
   .login { display: block; }
