@@ -30,7 +30,8 @@ const empty = text => `<p class="empty">${esc(text)}</p>`;
 const signed = value => (value > 0 ? '+' : '') + number(value);
 export const listControls = (key, label = 'Tìm mặt hàng') => `<div class="list-controls" data-list-controls="${esc(key)}">
   ${label ? `<label>${esc(label)}<input type="search" autocomplete="off" data-list-search></label>` : ''}
-  <div class="list-pages"><button class="button" type="button" data-list-prev>Trước</button>
+  <small data-list-empty role="status" hidden>Không có kết quả</small>
+  <div class="list-pages" data-list-pages hidden><button class="button" type="button" data-list-prev>Trước</button>
   <small data-list-status aria-live="polite"></small><button class="button" type="button" data-list-next>Sau</button></div>
 </div>`;
 export const itemSearch = item => [item.name, item.id, item.sku, item.category, item.supplier].filter(Boolean).join(' ');
@@ -76,7 +77,8 @@ export function renderDashboard(state) {
     report: () => reportView(state, items, locations),
   };
   return `<div class="shell"><aside class="sidebar">${brand}
-    <nav aria-label="Chức năng kho">${tabs}</nav>
+    <nav aria-label="Chức năng kho" ${manager ? 'data-manager-nav' : ''}>${tabs}</nav>
+    ${manager ? '<small class="nav-scroll-hint" aria-hidden="true" hidden>↔ Cuộn ngang để xem thêm tab</small>' : ''}
     <div class="account"><strong>${esc(data.user.name)}</strong><small>${manager ? 'Quản lý' : 'Nhân viên'}</small>
       <button type="button" data-action="logout">Đăng xuất</button>
     </div></aside>
@@ -321,7 +323,8 @@ function countView(state, stock, items, locations) {
       }).join('')}</div>
       <label>Người kiểm kê<input id="count-performed" maxlength="150" value="${esc(draft.performedBy)}"></label>
       <label>Ghi chú<textarea id="count-note" rows="2" maxlength="500">${esc(draft.note)}</textarea></label>
-      <div class="count-footer"><span id="count-progress" aria-live="polite"></span>${button('Kiểm tra và gửi', 'submit-count', '', true)}</div>` : ''}
+      <div class="count-footer"><span id="count-progress" aria-live="polite"></span>${button('Kiểm tra và gửi', 'submit-count', '', true)}</div>
+      <small>Lần gửi này gồm các nhóm đã đếm tại địa điểm đang chọn.</small>` : ''}
   </section><div class="tickets count-history" data-list><h2>Phiếu đã gửi gần đây</h2>
     ${history ? listControls('count-history', 'Tìm phiếu hoặc mặt hàng') + history : empty('Chưa có phiếu kiểm kê.')}</div>`;
 }

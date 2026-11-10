@@ -20,6 +20,7 @@ let busy = false;
 let readVersion = 0;
 const listStates = new Map();
 const pageSize = 20;
+const mobileNav = matchMedia('(max-width: 650px)');
 const searchText = value => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').trim();
 
 function setupLists(root, saved = new Map()) {
@@ -31,6 +32,9 @@ function setupLists(root, saved = new Map()) {
     const input = controls.querySelector('[data-list-search]');
     const prev = controls.querySelector('[data-list-prev]');
     const next = controls.querySelector('[data-list-next]');
+    const pagination = controls.querySelector('[data-list-pages]');
+    const status = controls.querySelector('[data-list-status]');
+    const empty = controls.querySelector('[data-list-empty]');
     if (input) input.value = state.query;
     function render() {
       const query = searchText(state.query);
@@ -43,8 +47,10 @@ function setupLists(root, saved = new Map()) {
       rows.forEach(row => { row.hidden = !visible.has(row); });
       prev.disabled = state.page === 0;
       next.disabled = state.page + 1 === pages;
-      controls.querySelector('[data-list-status]').textContent = matches.length
-        ? (start + 1) + '–' + (start + visible.size) + ' / ' + matches.length : 'Không có kết quả';
+      pagination.hidden = pages < 2;
+      empty.hidden = matches.length > 0 || (!rows.length && Boolean(list.querySelector(':scope > .empty')));
+      controls.hidden = !input && pagination.hidden && empty.hidden;
+      status.textContent = pagination.hidden ? '' : (start + 1) + '–' + (start + visible.size) + ' / ' + matches.length;
     }
     input?.addEventListener('input', () => { state.query = input.value; state.page = 0; render(); });
     input?.addEventListener('keydown', event => { if (event.key === 'Enter') event.preventDefault(); });
@@ -62,13 +68,33 @@ function notify(message) {
   toastTimer = setTimeout(() => { toast.hidden = true; }, 6000);
 }
 
+function updateManagerNav(scroll = 0, focusedTab) {
+  const nav = app.querySelector('[data-manager-nav]');
+  if (!nav || !mobileNav.matches) return;
+  const active = nav.querySelector('[aria-current="page"]');
+  if (focusedTab) nav.querySelector(`[data-id="${CSS.escape(focusedTab)}"]`)?.focus({ preventScroll: true });
+  nav.scrollLeft = scroll;
+  const bounds = nav.getBoundingClientRect();
+  const tab = active.getBoundingClientRect();
+  const padding = 4;
+  if (tab.left < bounds.left + padding) nav.scrollLeft += tab.left - bounds.left - padding;
+  else if (tab.right > bounds.right - padding) nav.scrollLeft += tab.right - bounds.right + padding;
+  app.querySelector('.nav-scroll-hint').hidden = nav.scrollWidth <= nav.clientWidth;
+}
+
+window.addEventListener('resize', () => updateManagerNav(app.querySelector('[data-manager-nav]')?.scrollLeft));
+
 function draw() {
   if (state.page === 'counts' && state.data) state.draft = readDraft();
+  const nav = app.querySelector('[data-manager-nav]');
+  const navScroll = nav?.scrollLeft;
+  const focusedTab = nav?.contains(document.activeElement) ? document.activeElement.dataset.id : undefined;
   document.body.classList.toggle('staff', state.data?.user.role === 'staff');
   invoiceObserver?.disconnect();
   invoiceUrls.forEach(({ url }) => URL.revokeObjectURL(url));
   invoiceUrls.clear();
   app.innerHTML = state.data ? renderDashboard(state) : renderLogin();
+  updateManagerNav(navScroll, focusedTab);
   setupLists(app, listStates);
   observeInvoices();
   app.removeAttribute('aria-busy');
@@ -134,8 +160,9 @@ async function refresh() {
     state.page === 'report' ? api('report?' + params) : null,
   ]);
   if (version !== readVersion || !state.token) return;
+  const initial = !state.data;
   state.data = data;
-  if (data.user.role === 'staff' && state.page === 'stock') state.page = 'counts';
+  if (initial) restoreCountPage();
   if (history) state.history = history;
   if (report) state.report = report;
   draw();
@@ -296,7 +323,8 @@ function formError(form, message) {
   error.hidden = !message;
 }
 
-function showForm({ title, fields, action, collect, submit = 'Lưu', success = 'Đã lưu.', onSuccess }) {
+function showForm({ title, fields, action, collect, save = pending => api(action, { method: 'POST', ...pending }),
+  submit = 'Lưu', success = 'Đã lưu.', onSuccess }) {
   dialog.innerHTML = `<h2 id="dialog-title">${esc(title)}</h2><form>
     ${fields}<p class="error" role="alert" hidden></p>
     <div class="actions">${button('Hủy', 'close')}<button class="button primary" type="submit">${esc(submit)}</button></div>
@@ -318,7 +346,7 @@ function showForm({ title, fields, action, collect, submit = 'Lưu', success = '
     formError(form, '');
     try {
       pending ??= { data: await collect(new FormData(form), form), key: newKey() };
-      await api(action, { method: 'POST', ...pending });
+      await save(pending);
       onSuccess?.();
       dialog.close();
       notify(success);
@@ -353,25 +381,85 @@ function countLocation() {
   return state.location || state.data.user.location_id;
 }
 
-function draftKey() {
-  return JSON.stringify(['bep-count-draft', apiBase, state.data.items[0]?.id, state.data.user.id, countLocation(), state.category]);
+function draftScope() {
+  return ['bep-count-draft', apiBase, state.data.items[0]?.id, state.data.user.id];
 }
 
-function readDraft() {
+function draftKey(place = countLocation(), category = state.category) {
+  return JSON.stringify([...draftScope(), place, category]);
+}
+
+function readStored(key) {
   try {
-    const saved = localStorage.getItem(draftKey());
-    if (saved) return JSON.parse(saved);
+    return JSON.parse(localStorage.getItem(key));
   } catch {
-    // Counting still works when this browser cannot save a draft.
+    return null;
   }
-  return { values: {}, performedBy: '', note: '' };
+}
+
+function readDraft(place = countLocation(), category = state.category) {
+  const draft = readStored(draftKey(place, category));
+  const values = draft?.values;
+  return { values: values && typeof values === 'object' && !Array.isArray(values) ? values : {},
+    performedBy: typeof draft?.performedBy === 'string' ? draft.performedBy : '',
+    note: typeof draft?.note === 'string' ? draft.note : '' };
+}
+
+function countDrafts(place, activeDraft) {
+  const items = new Map(state.data.items.map(item => [item.id, item]));
+  const groups = new Map();
+  for (const row of state.data.stock) {
+    if (row.location_id !== place) continue;
+    const item = items.get(row.item_id);
+    if (!item?.base_unit) continue;
+    const { category } = item;
+    if (!groups.has(category)) {
+      const draft = category === state.category && activeDraft ? activeDraft : readDraft(place, category);
+      groups.set(category, { category, draft, entries: [] });
+    }
+    const group = groups.get(category);
+    const entry = group.draft.values[item.id];
+    if (typeof entry?.quantity === 'string' && entry.quantity.trim()) group.entries.push({ item, row, entry });
+  }
+  return [...groups.values()].filter(group => group.entries.length);
+}
+
+function rememberCountGroup() {
+  try {
+    localStorage.setItem(JSON.stringify(draftScope()), JSON.stringify({ place: countLocation(), category: state.category }));
+  } catch { /* Draft storage may be unavailable. */ }
+}
+
+function restoreCountGroup(place, previous = readStored(JSON.stringify(draftScope()))) {
+  const groups = countDrafts(place);
+  return (previous?.place === place && groups.find(group => group.category === previous.category)?.category)
+    || groups[0]?.category || '';
+}
+
+function restoreCountPage() {
+  const previous = readStored(JSON.stringify(draftScope()));
+  const { user, locations } = state.data;
+  if (user.role === 'staff') {
+    state.page = 'counts';
+    state.category = restoreCountGroup(user.location_id, previous);
+    return;
+  }
+  // Older drafts have no saved location preference. Restore only when their location is unambiguous.
+  const candidates = locations.filter(place => !previous || place.id === previous.place)
+    .map(place => ({ id: place.id, category: restoreCountGroup(place.id, previous) }))
+    .filter(place => place.category);
+  if (candidates.length !== 1) return;
+  state.page = 'counts';
+  state.location = candidates[0].id;
+  state.category = candidates[0].category;
 }
 
 function updateCountView() {
   const progress = app.querySelector('#count-progress');
   if (progress) {
-    const count = app.querySelectorAll('[data-count-item]').length;
-    const entered = Object.keys(state.draft.values).length;
+    const fields = [...app.querySelectorAll('[data-count-item]')];
+    const count = fields.length;
+    const entered = fields.filter(field => field.value.trim()).length;
     progress.textContent = entered + '/' + count + ' đã nhập' + (count ? ' · ' + (count - entered) + ' chưa đếm' : '');
   }
 }
@@ -411,28 +499,58 @@ function fullReceiptForm(kind, id) {
 
 function submitCount() {
   const place = countLocation();
-  const category = state.category;
-  const draft = state.draft;
-  const performedBy = draft.performedBy.trim();
-  const lines = Object.entries(draft.values).map(([item, entry]) => ({ item, ...entry }));
-  if (!performedBy || !lines.length) throw new Error('Nhập tên người kiểm kê và ít nhất một số đếm.');
-  if (lines.some(line => !/^\d{1,10}(\.\d{1,3})?$/.test(line.quantity))) throw new Error('Kiểm tra lại các số đếm.');
-  const stale = lines.find(line => state.data.stock.find(row => row.location_id === place && row.item_id === line.item)?.revision !== line.revision);
-  if (stale) throw new Error('Kiểm và nhập lại số của ' + getItem(stale.item).name + ' vì tồn đã thay đổi.');
-  const key = draftKey();
+  const groups = countDrafts(place, state.draft);
+  const defaultName = state.draft.performedBy.trim() || groups.find(group => group.draft.performedBy.trim())?.draft.performedBy.trim();
+  if (!defaultName || !groups.length) throw new Error('Nhập tên người kiểm kê và ít nhất một số đếm.');
+  const requests = groups.map(({ category, draft, entries }) => {
+    const lines = entries.map(({ item, row, entry }) => {
+      const label = item.name + ' (' + category + ')';
+      const unit = entry.unit ?? item.base_unit;
+      if (!/^\d{1,10}(\.\d{1,3})?$/.test(entry.quantity) || !Object.hasOwn(item.units, unit)) {
+        throw new Error('Kiểm tra lại số đếm và đơn vị của ' + label + '.');
+      }
+      if (entry.revision !== row.revision) throw new Error('Kiểm và nhập lại số của ' + label + ' vì tồn đã thay đổi.');
+      return { item: item.id, quantity: entry.quantity, unit, revision: entry.revision };
+    });
+    return { draft, key: newKey(), data: { location: place, category, lines,
+      performedBy: draft.performedBy.trim() || defaultName, note: draft.note.trim() } };
+  });
+  const queue = [...requests];
   showForm({
     title: 'Xác nhận gửi phiếu',
-    fields: `<p><strong>${esc(getLocation(place))} · ${esc(category)}</strong></p>
-      <p>${lines.length} mặt hàng sẽ được cập nhật tồn. Các ô bỏ trống giữ nguyên số dư.</p>`,
-    action: 'count-sheets',
-    collect: () => ({ location: place, category, performedBy, lines, note: draft.note.trim() }),
-    submit: 'Gửi kiểm kê',
-    success: 'Đã gửi phiếu và cập nhật tồn.',
-    onSuccess: () => {
-      try { localStorage.removeItem(key); } catch { /* Storage may be unavailable. */ }
-      state.draft = null;
+    fields: `<p><strong>${esc(getLocation(place))} · ${requests.length} nhóm đã đếm</strong></p>
+      <ul>${requests.map(({ data }) => `<li>${esc(data.category)} · ${data.lines.length} mặt hàng · ${esc(data.performedBy)}</li>`).join('')}</ul>
+      <p>Các ô bỏ trống giữ nguyên số dư.</p>`,
+    collect: () => queue,
+    save: async ({ data: remaining }) => {
+      while (remaining.length) {
+        const { data, key, draft } = remaining[0];
+        try {
+          await api('count-sheets', { method: 'POST', data, key });
+        } catch (error) {
+          const sent = requests.length - remaining.length;
+          if (sent || error.status === 409) await refresh().catch(() => {});
+          throw Object.assign(new Error(`Đã gửi ${sent}/${requests.length} nhóm. Nhóm ${data.category}: ${error.message}`),
+            { status: error.status });
+        }
+        clearSubmittedDraft(place, data.category, draft, data.lines);
+        remaining.shift();
+      }
     },
+    submit: 'Gửi kiểm kê',
+    success: `Đã gửi ${requests.length} phiếu và cập nhật tồn.`,
   });
+}
+
+function clearSubmittedDraft(place, category, draft, lines) {
+  try {
+    const current = readDraft(place, category);
+    if (JSON.stringify(current) !== JSON.stringify(draft)) return;
+    const key = draftKey(place, category);
+    for (const line of lines) delete current.values[line.item];
+    if (Object.keys(current.values).length) localStorage.setItem(key, JSON.stringify(current));
+    else localStorage.removeItem(key);
+  } catch { /* Storage may be unavailable. */ }
 }
 
 function priceForm(id) {
@@ -733,7 +851,8 @@ app.addEventListener('submit', async event => {
 app.addEventListener('change', async event => {
   if (event.target.id === 'location-filter') {
     state.location = event.target.value;
-    state.category = '';
+    state.category = state.page === 'counts' ? restoreCountGroup(countLocation()) : '';
+    if (state.page === 'counts') rememberCountGroup();
     if (state.page === 'history' || state.page === 'report') {
       state.history = { entries: [], next: null };
       state.report = null;
@@ -748,6 +867,7 @@ app.addEventListener('change', async event => {
   }
   if (event.target.id === 'count-category') {
     state.category = event.target.value;
+    rememberCountGroup();
     draw();
     app.querySelector('#count-category')?.focus();
   }
@@ -778,6 +898,7 @@ app.addEventListener('input', event => {
     updateCountView();
   } else return;
   try { localStorage.setItem(draftKey(), JSON.stringify(state.draft)); } catch { /* The active form still retains the values. */ }
+  rememberCountGroup();
 });
 
 dialog.addEventListener('change', event => {
@@ -850,6 +971,7 @@ dialog.addEventListener('close', () => {
 const actions = {
   page: async id => {
     state.page = id;
+    if (id === 'counts' && !state.category) state.category = restoreCountGroup(countLocation());
     if (id === 'history') state.history = { entries: [], next: null };
     draw();
     if (id === 'history' || id === 'report') await refresh();
