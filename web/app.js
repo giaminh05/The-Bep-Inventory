@@ -381,6 +381,26 @@ function countLocation() {
   return state.location || state.data.user.location_id;
 }
 
+function staffPasswordForm(id) {
+  const account = state.data.accounts?.find(candidate => candidate.id === id);
+  if (!account) return;
+  showForm({
+    title: 'Đổi mật khẩu nhân viên',
+    fields: `<p><strong>${esc(account.id)}</strong> · ${esc(getLocation(account.location_id))}</p>
+      <p class="hint">Sau khi lưu, tất cả thiết bị đang dùng tài khoản này sẽ phải đăng nhập lại.</p>
+      <label>Mật khẩu mới<input type="password" name="password" autocomplete="new-password" required minlength="12" maxlength="256"></label>
+      <label>Nhập lại mật khẩu mới<input type="password" name="confirmation" autocomplete="new-password" required minlength="12" maxlength="256"></label>`,
+    action: 'staff-passwords',
+    collect: form => {
+      const password = form.get('password');
+      if (password !== form.get('confirmation')) throw new Error('Hai mật khẩu không khớp.');
+      return { account: id, password };
+    },
+    submit: 'Lưu mật khẩu mới',
+    success: 'Đã đổi mật khẩu và thu hồi các phiên đăng nhập cũ.',
+  });
+}
+
 function draftScope() {
   return ['bep-count-draft', apiBase, state.data.items[0]?.id, state.data.user.id];
 }
@@ -964,11 +984,13 @@ dialog.addEventListener('keydown', event => {
 });
 dialog.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
 dialog.addEventListener('close', () => {
+  dialog.querySelectorAll('input[type="password"]').forEach(input => { input.value = ''; });
   if (photoUrl) URL.revokeObjectURL(photoUrl);
   photoUrl = null;
 });
 
 const actions = {
+  'staff-password': staffPasswordForm,
   page: async id => {
     state.page = id;
     if (id === 'counts' && !state.category) state.category = restoreCountGroup(countLocation());

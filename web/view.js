@@ -19,6 +19,7 @@ const sections = {
   transfers: ['Chuyển kho', 'Theo dõi hàng xuất, hàng đang đi và chênh lệch thực nhận.'],
   history: ['Nhật ký', 'Xem số dư sau mỗi giao dịch, người thực hiện và thời gian Atlanta.'],
   report: ['Báo cáo tuần', 'Xem lượng tiêu hao theo tuần Atlanta và giá trị tồn hiện tại.'],
+  accounts: ['Tài khoản', 'Đổi mật khẩu tài khoản nhân viên tại các địa điểm.'],
 };
 export const brand = `<div class="brand"><img src="./icon.svg" alt=""><div><strong>The Bếp Teahouse</strong><small>Inventory</small></div></div>`;
 export const option = (value, label, selected) =>
@@ -75,6 +76,7 @@ export function renderDashboard(state) {
     transfers: () => transfersView(transfers, items, locations, data.user),
     history: () => historyView(state.history, items, locations, state.historyQuery),
     report: () => reportView(state, items, locations),
+    accounts: () => accountsView(data.accounts ?? [], locations),
   };
   return `<div class="shell"><aside class="sidebar">${brand}
     <nav aria-label="Chức năng kho" ${manager ? 'data-manager-nav' : ''}>${tabs}</nav>
@@ -94,6 +96,16 @@ export function renderDashboard(state) {
       <header class="heading"><div><h1>${title}</h1><p>${description}</p></div>${create[page] ?? ''}</header>
       ${body[page]()}
     </section></div>`;
+}
+
+function accountsView(accounts, locations) {
+  if (!accounts.length) return `<div class="panel">${empty('Chưa có tài khoản nhân viên.')}</div>`;
+  return `<div class="panel table-wrap" tabindex="0" aria-label="Tài khoản nhân viên"><table>
+    <thead><tr><th>Tài khoản</th><th>Địa điểm</th><th>Thao tác</th></tr></thead>
+    <tbody>${accounts.map(account => `<tr><td><strong>${esc(account.name)}</strong><small>${esc(account.id)}</small></td>
+      <td>${esc(locations[account.location_id] ?? '—')}</td>
+      <td>${button('Đổi mật khẩu', 'staff-password', account.id)}</td></tr>`).join('')}</tbody>
+  </table></div>`;
 }
 
 function stockSummary(stock, items) {
