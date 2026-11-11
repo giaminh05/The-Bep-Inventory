@@ -1,0 +1,20 @@
+name: Verify iOS Keychain lifecycle
+on:
+  push:
+    branches: [Minh/verify-ios-staff-sessions]
+permissions:
+  contents: read
+jobs:
+  simulator:
+    runs-on: macos-15
+    timeout-minutes: 15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npx --yes pnpm@11.25.0 install --frozen-lockfile
+      - name: Build and exercise native iOS session lifecycle
+        run: bash scripts/verify-ios-lifecycle.sh
