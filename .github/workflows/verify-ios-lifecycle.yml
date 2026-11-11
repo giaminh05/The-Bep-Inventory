@@ -7,14 +7,19 @@ permissions:
 jobs:
   simulator:
     runs-on: macos-15
-    timeout-minutes: 15
+    timeout-minutes: 9
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      BEP_IOS_TMP: ${{ runner.temp }}/bep-ios-session-test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
       - run: npx --yes pnpm@11.25.0 install --frozen-lockfile
-      - name: Build and exercise native iOS session lifecycle
-        run: bash scripts/verify-ios-lifecycle.sh
+      - name: Compile bundled app for iOS Simulator
+        timeout-minutes: 3
+        run: bash scripts/verify-ios-lifecycle.sh build
+      - name: Launch app and verify Keychain session lifecycle
+        timeout-minutes: 5
+        run: bash scripts/verify-ios-lifecycle.sh runtime
