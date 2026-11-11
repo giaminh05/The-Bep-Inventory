@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@aparajita/capacitor-secure-storage':
+        specifier: 8.0.1
+        version: 8.0.1
       '@capacitor/android':
         specifier: ^8.0.0
         version: 8.6.0(@capacitor/core@8.6.0)
@@ -27,10 +30,19 @@ importers:
 
 packages:
 
+  '@aparajita/capacitor-secure-storage@8.0.1':
+    resolution: {integrity: sha512-NSYIQtH6TyBgL3myumQGcCE3iecq2PtGNFlGxl1fJKEU37Dv5DudzDlwg42cgbVxCm1ay72g4X7rTSAvKULsVg==}
+    engines: {node: '>=20.0.0'}
+
   '@capacitor/android@8.6.0':
     resolution: {integrity: sha512-6IJS0TCfV/F/8+324CCwYd3xL6r+TH0W7zzaxYzPz9IV3YWCNvsZDuCCPHUIBC5iASb9od827ddSJ6rz+9Pu1Q==}
     peerDependencies:
       '@capacitor/core': ^8.6.0
+
+  '@capacitor/app@8.1.2':
+    resolution: {integrity: sha512-uKBlsrXH0IdvUn69e/KKYbZ32A06pcrUdG8LWuZ/6y33YMXZXLEEdNSwl+jKS/SrsTWqnePs8EqSWaiQM3mUGA==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
 
   '@capacitor/cli@8.6.0':
     resolution: {integrity: sha512-TyLo1v6AqK39inlB5Edm7eFc+dyk4r+Du5bbyD+cRm/u/3b+LkNIeyp5wwYp3ToO3rWiLs4T/PabXGADO0Rlxg==}
@@ -44,6 +56,11 @@ packages:
     resolution: {integrity: sha512-Y2PE4zoBqMrSTWoVMJmX2byBznjn6egmATzoEUJiGVbVubkNpAvkF/tl0SBKDyP67ngyedTx1tQq5IGYIhby1A==}
     peerDependencies:
       '@capacitor/core': ^8.6.0
+
+  '@capacitor/keyboard@8.0.6':
+    resolution: {integrity: sha512-Bbe+9V0qaT6dzEFJEK7BUWR01l2+vZE8FM5ITF/WgKtx+G6eGZ6d5+YiSMRJBAK0VGjdO59v8yiQ10Doa5KyvQ==}
+    peerDependencies:
+      '@capacitor/core': '>=8.0.0'
 
   '@ionic/cli-framework-output@2.2.8':
     resolution: {integrity: sha512-TshtaFQsovB4NWRBydbNFawql6yul7d5bMiW1WYYf17hd99V6xdDdk3vtF51bw6sLkxON3bDQpWsnUc9/hVo3g==}
@@ -423,7 +440,19 @@ packages:
 
 snapshots:
 
+  '@aparajita/capacitor-secure-storage@8.0.1':
+    dependencies:
+      '@capacitor/android': 8.6.0(@capacitor/core@8.6.0)
+      '@capacitor/app': 8.1.2(@capacitor/core@8.6.0)
+      '@capacitor/core': 8.6.0
+      '@capacitor/ios': 8.6.0(@capacitor/core@8.6.0)
+      '@capacitor/keyboard': 8.0.6(@capacitor/core@8.6.0)
+
   '@capacitor/android@8.6.0(@capacitor/core@8.6.0)':
+    dependencies:
+      '@capacitor/core': 8.6.0
+
+  '@capacitor/app@8.1.2(@capacitor/core@8.6.0)':
     dependencies:
       '@capacitor/core': 8.6.0
 
@@ -455,6 +484,10 @@ snapshots:
       tslib: 2.9.1
 
   '@capacitor/ios@8.6.0(@capacitor/core@8.6.0)':
+    dependencies:
+      '@capacitor/core': 8.6.0
+
+  '@capacitor/keyboard@8.0.6(@capacitor/core@8.6.0)':
     dependencies:
       '@capacitor/core': 8.6.0
 

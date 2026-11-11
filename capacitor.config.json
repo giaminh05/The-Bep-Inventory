@@ -1,5 +1,6 @@
 {
   "appId": "com.thebepteahouse.inventory",
   "appName": "The Bếp Inventory",
-  "webDir": "dist"
+  "webDir": "dist",
+  "loggingBehavior": "none"
 }

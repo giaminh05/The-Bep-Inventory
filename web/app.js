@@ -5,12 +5,18 @@ const app = document.querySelector('#app');
 const dialog = document.querySelector('#dialog');
 const toast = document.querySelector('#toast');
 const storageKey = 'bep-session';
-const token = sessionStorage.getItem(storageKey) ?? sessionStorage.getItem('bep-manager-session') ?? sessionStorage.getItem('bep-staff-session');
+const capacitor = window.Capacitor;
+const native = capacitor?.isNativePlatform?.() === true;
+const token = native ? null : sessionStorage.getItem(storageKey) ?? sessionStorage.getItem('bep-manager-session') ?? sessionStorage.getItem('bep-staff-session');
 if (token) sessionStorage.setItem(storageKey, token);
+if (native) sessionStorage.removeItem(storageKey);
 sessionStorage.removeItem('bep-manager-session');
 sessionStorage.removeItem('bep-staff-session');
 const state = { token, data: null, page: 'stock', location: '', lowOnly: false,
-  history: { entries: [], next: null }, historyQuery: '', category: '', draft: null, report: null, reportWeek: '' };
+  history: { entries: [], next: null }, historyQuery: '', category: '', draft: null, report: null, reportWeek: '',
+  sessionMessage: '', pendingLogout: false, persistent: false };
+let restoring = false;
+let signingIn = false;
 let toastTimer;
 let photoUrl;
 let orderLineId = 0;
@@ -93,7 +99,10 @@ function draw() {
   invoiceObserver?.disconnect();
   invoiceUrls.forEach(({ url }) => URL.revokeObjectURL(url));
   invoiceUrls.clear();
-  app.innerHTML = state.data ? renderDashboard(state) : renderLogin();
+  app.innerHTML = state.sessionMessage
+    ? `<section class="loading" role="status"><p>${esc(state.sessionMessage)}</p>
+      ${button('Thử lại', 'restore-session')}</section>`
+    : state.data ? renderDashboard(state) : renderLogin();
   updateManagerNav(navScroll, focusedTab);
   setupLists(app, listStates);
   observeInvoices();
@@ -101,8 +110,22 @@ function draw() {
   if (state.page === 'counts' && state.data) updateCountView();
 }
 
-function clearSession() {
+async function secureSession(method, record) {
+  // Capacitor injects this bridge into both packaged pages and the Android demo WebView.
+  // These native method names and Keychain access values are from Secure Storage 8.0.1.
+  try {
+    const options = { prefixedKey: 'bep-session-v1:' + (apiBase || location.origin), sync: false };
+    if (record) Object.assign(options, { data: JSON.stringify(record), access: 1 });
+    return await capacitor.nativePromise('SecureStorage', method, options);
+  } catch {
+    throw new Error('Không thể truy cập kho lưu phiên an toàn. Mở khóa thiết bị rồi thử lại.');
+  }
+}
+
+async function clearSession() {
   state.token = null;
+  state.persistent = state.pendingLogout = false;
+  state.sessionMessage = '';
   state.data = null;
   state.page = 'stock';
   state.location = '';
@@ -111,14 +134,63 @@ function clearSession() {
   state.category = state.historyQuery = state.reportWeek = '';
   state.draft = state.report = null;
   listStates.clear();
-  sessionStorage.removeItem(storageKey);
   if (dialog.open) dialog.close();
+  if (native) {
+    try {
+      await secureSession('internalRemoveItem');
+    } catch (error) {
+      state.sessionMessage = error.message;
+    }
+  } else sessionStorage.removeItem(storageKey);
   draw();
+}
+
+async function restoreNativeSession() {
+  if (restoring) return;
+  restoring = true;
+  state.sessionMessage = 'Đang xác minh phiên đăng nhập…';
+  draw();
+  try {
+    if (!state.token) {
+      const { data } = await secureSession('internalGetItem');
+      if (!data) {
+        state.sessionMessage = '';
+        draw();
+        return;
+      }
+      const record = JSON.parse(data);
+      if (typeof record?.token !== 'string' || !/^[a-f0-9]{64}$/.test(record.token)) {
+        await clearSession();
+        return;
+      }
+      state.token = record.token;
+      state.persistent = true;
+      state.pendingLogout = record.logout === true;
+    }
+    if (state.pendingLogout) {
+      await api('logout', { method: 'POST' });
+      await clearSession();
+      return;
+    }
+    await refresh();
+  } catch (error) {
+    if (error.status === 401) {
+      if (!state.sessionMessage && !state.pendingLogout) notify(error.message);
+      return;
+    }
+    state.sessionMessage = state.pendingLogout
+      ? 'Chưa thể hoàn tất đăng xuất. Kết nối lại với máy chủ để thu hồi phiên.'
+      : error instanceof SyntaxError ? 'Không thể đọc phiên đã lưu. Vui lòng thử lại.' : error.message;
+    draw();
+  } finally {
+    restoring = false;
+  }
 }
 
 async function api(path, { method = 'GET', data, key, binary = false } = {}) {
   const headers = {};
-  if (state.token) headers.Authorization = 'Bearer ' + state.token;
+  const token = state.token;
+  if (token) headers.Authorization = 'Bearer ' + token;
   if (data !== undefined) headers['Content-Type'] = 'application/json';
   if (key) headers['Idempotency-Key'] = key;
   const controller = new AbortController();
@@ -129,7 +201,7 @@ async function api(path, { method = 'GET', data, key, binary = false } = {}) {
       signal: controller.signal,
     });
     if (!response.ok) {
-      if (response.status === 401 && path !== 'login') clearSession();
+      if (response.status === 401 && path !== 'login' && token === state.token) await clearSession();
       const body = await response.json().catch(() => ({}));
       throw Object.assign(new Error(body.error ?? 'Máy chủ trả về lỗi.'), { status: response.status });
     }
@@ -161,6 +233,7 @@ async function refresh() {
   ]);
   if (version !== readVersion || !state.token) return;
   const initial = !state.data;
+  state.sessionMessage = '';
   state.data = data;
   if (initial) restoreCountPage();
   if (history) state.history = history;
@@ -853,17 +926,36 @@ app.addEventListener('submit', async event => {
   }
   if (form.id !== 'login-form') return;
   const submit = form.querySelector('button');
+  if (signingIn) return;
+  signingIn = true;
   submit.disabled = true;
   formError(form, '');
   try {
-    const result = await api('login', { method: 'POST', data: Object.fromEntries(new FormData(form)) });
+    const data = Object.fromEntries(new FormData(form));
+    if (native) data.native = true;
+    const result = await api('login', { method: 'POST', data });
     state.token = result.token;
-    await refresh();
-    if (state.token) sessionStorage.setItem(storageKey, state.token);
+    if (native) {
+      if (result.persistent) {
+        try {
+          await secureSession('internalSetItem', { token: result.token });
+          state.persistent = true;
+        } catch (error) {
+          await api('logout', { method: 'POST' }).catch(() => {});
+          state.token = null;
+          throw error;
+        }
+      }
+      await restoreNativeSession();
+    } else {
+      await refresh();
+      if (state.token) sessionStorage.setItem(storageKey, state.token);
+    }
   } catch (error) {
     formError(form, error.message);
     if (!form.isConnected) notify(error.message);
   } finally {
+    signingIn = false;
     submit.disabled = false;
   }
 });
@@ -990,6 +1082,7 @@ dialog.addEventListener('close', () => {
 });
 
 const actions = {
+  'restore-session': restoreNativeSession,
   'staff-password': staffPasswordForm,
   page: async id => {
     state.page = id;
@@ -1011,8 +1104,20 @@ const actions = {
   'low-stock': () => { state.lowOnly = true; draw(); },
   'all-stock': () => { state.lowOnly = false; draw(); },
   logout: async () => {
+    if (native && state.persistent) {
+      if (restoring) return;
+      busy = true;
+      try {
+        await secureSession('internalSetItem', { token: state.token, logout: true });
+        state.pendingLogout = true;
+        await restoreNativeSession();
+      } finally {
+        busy = false;
+      }
+      return;
+    }
     await api('logout', { method: 'POST' });
-    clearSession();
+    await clearSession();
   },
   count: id => countOrThreshold('count', id),
   threshold: id => countOrThreshold('threshold', id),
@@ -1055,5 +1160,12 @@ document.addEventListener('click', async event => {
   }
 });
 
-if (state.token) refresh().catch(error => { draw(); notify(error.message); });
+if (native) {
+  const resume = () => {
+    if (!signingIn && !busy && document.visibilityState === 'visible' && (state.token || state.sessionMessage)) void restoreNativeSession();
+  };
+  window.addEventListener('online', resume);
+  document.addEventListener('visibilitychange', resume);
+  void restoreNativeSession();
+} else if (state.token) refresh().catch(error => { draw(); notify(error.message); });
 else draw();
