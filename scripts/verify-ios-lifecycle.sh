@@ -1,4 +1,5 @@
 set -euxo pipefail
+export BEP_IOS_TMP="$RUNNER_TEMP/bep-ios-session-test"
 mkdir -p "$BEP_IOS_TMP"
 if test "$1" = build; then
 npm run build:mobile -- https://127.0.0.1:4173
@@ -55,4 +56,5 @@ xcrun simctl terminate "$bep_sim" "$bep_id"
 bep_phase logout
 xcrun simctl terminate "$bep_sim" "$bep_id"
 bep_phase after-logout
+
 

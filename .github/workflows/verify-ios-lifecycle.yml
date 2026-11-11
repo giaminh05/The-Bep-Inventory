@@ -10,7 +10,6 @@ jobs:
     timeout-minutes: 9
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
-      BEP_IOS_TMP: ${{ runner.temp }}/bep-ios-session-test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
