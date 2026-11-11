@@ -47,6 +47,41 @@ function stock(snapshot, location, item) {
   return snapshot.stock.find(row => row.location_id === location && row.item_id === item);
 }
 
+test('manager rotates a staff password and revokes only that account’s sessions', async t => {
+  const { db, login, request } = await fixture(t);
+  const manager = await login('manager');
+  const duluth = await login('duluth');
+  const secondDevice = await login('duluth');
+  const norcross = await login('norcross');
+  const snapshot = await manager.snapshot();
+  assert.deepEqual(new Set(snapshot.accounts.map(account => account.location_id)), new Set(snapshot.locations.map(place => place.id)));
+  assert.ok(snapshot.accounts.every(account => Object.keys(account).sort().join(',') === 'id,location_id,name'));
+  assert.equal((await duluth.snapshot()).accounts, undefined);
+
+  const updated = { account: 'duluth', password: randomUUID() };
+  await duluth.post('staff-passwords', updated, 403);
+  await manager.post('staff-passwords', { ...updated, account: 'manager' }, 404);
+  await manager.post('staff-passwords', { ...updated, password: 'too short' }, 400);
+  await manager.post('staff-passwords', { ...updated, password }, 400);
+  const key = randomUUID();
+  assert.deepEqual(await manager.post('staff-passwords', updated, 200, key), { ok: true });
+  for (const device of [duluth, secondDevice]) {
+    await request('snapshot', { token: device.token, status: 401 });
+    await device.post('count-sheets', {}, 401);
+  }
+  await request('login', { body: { username: 'duluth', password }, status: 401 });
+  const { token } = await (await request('login', { body: { username: 'duluth', password: updated.password } })).json();
+  await manager.post('staff-passwords', updated, 200, key);
+  await manager.post('staff-passwords', { ...updated, password: randomUUID() }, 409, key);
+  await request('snapshot', { token });
+  await norcross.snapshot();
+  await manager.snapshot();
+
+  const stored = db.prepare('SELECT fingerprint, result FROM requests WHERE actor = ? AND key = ?').get('manager', key);
+  assert.match(stored.fingerprint, /^[a-f0-9]{32}:[a-f0-9]{128}$/);
+  assert.deepEqual(JSON.parse(stored.result), { ok: true });
+});
+
 test('standalone catalog creation enables scoped weekly counts in cases', async t => {
   const { login } = await fixture(t);
   const manager = await login('manager');

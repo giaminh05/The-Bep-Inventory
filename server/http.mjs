@@ -127,6 +127,10 @@ export function inventoryServer({ db, allowedOrigins = ['capacitor://localhost',
       const action = /^\/api\/([a-z-]+)$/.exec(path)?.[1];
       if (req.method === 'POST' && action) {
         const input = await readJson(req, ['receipts', 'delivery-receipts-all'].includes(action) ? photoLimit : 65536);
+        // A password reset can revoke this session while the request body is arriving.
+        if (!db.prepare('SELECT 1 FROM sessions WHERE token_hash = ? AND expires > ?').get(tokenHash, Date.now())) {
+          throw new HttpError(401, 'Phiên hết hạn. Vui lòng đăng nhập.');
+        }
         const result = applyAction(db, user, action, req.headers['idempotency-key'], input);
         return json(res, 200, result);
       }

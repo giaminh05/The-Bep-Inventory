@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { createRequire } from 'node:module';
 import { openDatabase } from '../server/db.mjs';
@@ -60,11 +61,12 @@ try {
       await managerPhone.getByRole('heading', { name: title, exact: true }).waitFor();
       await assertActiveTabVisible();
     }
-    await nav.getByRole('button', { name: 'Nhật ký', exact: true }).focus();
+    await nav.getByRole('button', { name: 'Báo cáo tuần', exact: true }).focus();
     await managerPhone.keyboard.press('Tab');
     await managerPhone.keyboard.press('Enter');
-    await managerPhone.getByRole('heading', { name: 'Giá trị tồn hiện tại', exact: true }).waitFor();
-    assert.equal(await active.evaluate(tab => tab === document.activeElement && tab.textContent === 'Báo cáo tuần'), true);
+    await managerPhone.getByRole('heading', { name: 'Tài khoản', exact: true }).waitFor();
+    await managerPhone.waitForFunction(() =>
+      document.activeElement.matches('[data-manager-nav] [data-id="accounts"][aria-current="page"]'));
     await assertActiveTabVisible();
     const renderedNav = await nav.elementHandle();
     await managerPhone.getByRole('button', { name: 'Làm mới' }).tap();
@@ -131,7 +133,7 @@ try {
   await phone.getByLabel('Người kiểm kê').fill('Người đếm');
   await phone.getByRole('button', { name: 'Kiểm tra và gửi' }).click();
   await phone.getByRole('button', { name: 'Gửi kiểm kê', exact: true }).click();
-  await phone.getByText('Người đếm', { exact: false }).waitFor();
+  await phone.locator('.count-history summary').filter({ hasText: 'Người đếm' }).waitFor();
   await desktop.getByRole('button', { name: 'Làm mới' }).click();
   await row.getByText('Sắp hết', { exact: true }).waitFor();
   await locationFilter.selectOption('');
@@ -330,7 +332,7 @@ try {
   assert.equal(await phone.getByLabel('Đơn vị đếm Siro thử').inputValue(), 'case');
   await phone.getByRole('button', { name: 'Kiểm tra và gửi' }).click();
   await phone.getByRole('button', { name: 'Gửi kiểm kê', exact: true }).click();
-  await phone.getByText('Nhân viên quy đổi', { exact: false }).waitFor();
+  await phone.locator('.count-history summary').filter({ hasText: 'Nhân viên quy đổi' }).waitFor();
   await phone.context().setOffline(true);
   await phone.getByRole('button', { name: 'Làm mới' }).click();
   await phone.getByText('Mất kết nối với máy chủ. Kiểm tra mạng rồi thử lại.').waitFor();
@@ -347,6 +349,27 @@ try {
   const brand = desktop.locator('.brand strong');
   assert.equal(await brand.textContent(), 'The Bếp Teahouse');
   assert.match(await brand.evaluate(node => getComputedStyle(node).fontFamily), /Segoe UI/);
+  assert.equal(await phone.getByRole('button', { name: 'Tài khoản', exact: true }).count(), 0);
+  await locationFilter.selectOption('duluth');
+  await desktop.getByRole('button', { name: 'Tài khoản', exact: true }).click();
+  assert.equal(await desktop.getByRole('button', { name: 'Đổi mật khẩu', exact: true }).count(), 5);
+  await desktop.getByRole('row').filter({ hasText: 'Duluth' }).getByRole('button', { name: 'Đổi mật khẩu' }).click();
+  const passwordDialog = desktop.getByRole('dialog', { name: 'Đổi mật khẩu nhân viên' });
+  const updatedPassword = randomUUID();
+  await passwordDialog.getByLabel('Mật khẩu mới', { exact: true }).fill(updatedPassword);
+  const confirmation = passwordDialog.getByLabel('Nhập lại mật khẩu mới');
+  await confirmation.fill(randomUUID());
+  await passwordDialog.getByRole('button', { name: 'Lưu mật khẩu mới' }).click();
+  await passwordDialog.getByText('Hai mật khẩu không khớp.').waitFor();
+  await confirmation.fill(updatedPassword);
+  await passwordDialog.getByRole('button', { name: 'Lưu mật khẩu mới' }).click();
+  await desktop.getByText('Đã đổi mật khẩu và thu hồi các phiên đăng nhập cũ.').waitFor();
+  await phone.getByRole('button', { name: 'Làm mới' }).click();
+  await phone.getByRole('heading', { name: 'Đăng nhập', exact: true }).waitFor();
+  await phone.getByLabel('Tên đăng nhập').fill('duluth');
+  await phone.getByLabel('Mật khẩu', { exact: true }).fill(updatedPassword);
+  await phone.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+  await phone.getByRole('heading', { name: 'Phiếu kiểm kê', exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log('PASS mobile navigation, draft restoration, multi-group retry, pagination, stock, alerts, receipts, transfers and offline recovery.');
 } finally {

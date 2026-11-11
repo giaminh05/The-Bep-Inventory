@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { maxStock, scale, transaction } from './db.mjs';
+import { maxStock, passwordHash, scale, transaction, verifyPassword } from './db.mjs';
 
 export class HttpError extends Error {
   constructor(status, message) {
@@ -200,6 +200,17 @@ function receiveTransferLine(db, user, transfer, actual, final, receiver, memo, 
 }
 
 const actions = {
+  'staff-passwords'(db, user, input) {
+    const account = mustFind(db.prepare("SELECT id, password FROM users WHERE id = ? AND role = 'staff'")
+      .get(required(input.account, 'Tài khoản')), 'tài khoản nhân viên');
+    if (verifyPassword(input.password, account.password)) {
+      throw new HttpError(400, 'Mật khẩu mới phải khác mật khẩu hiện tại.');
+    }
+    db.prepare('UPDATE users SET password = ? WHERE id = ?').run(passwordHash(input.password), account.id);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(account.id);
+    return { ok: true };
+  },
+
   counts(db, user, input) {
     managerOnly(user);
     allow(user, input.location);
@@ -421,15 +432,26 @@ export function applyAction(db, user, action, key, input) {
     throw new HttpError(400, 'Thiếu mã chống lưu trùng hợp lệ.');
   }
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new HttpError(400, 'Dữ liệu không hợp lệ.');
-  const fingerprint = digest(action + '\n' + JSON.stringify(input));
+  const resetsPassword = action === 'staff-passwords';
+  if (resetsPassword) {
+    managerOnly(user);
+    if (typeof input.password !== 'string' || input.password.trim().length < 12 || input.password.length > 256) {
+      throw new HttpError(400, 'Mật khẩu mới phải có từ 12 đến 256 ký tự.');
+    }
+  }
+  const payload = action + '\n' + JSON.stringify(input);
+  const fingerprint = resetsPassword ? null : digest(payload);
   return transaction(db, () => {
     const previous = db.prepare('SELECT fingerprint, result FROM requests WHERE actor = ? AND key = ?').get(user.id, key);
     if (previous) {
-      if (previous.fingerprint !== fingerprint) throw new HttpError(409, 'Mã lưu đã được dùng cho dữ liệu khác.');
+      const matches = resetsPassword
+        ? previous.fingerprint.includes(':') && verifyPassword(payload, previous.fingerprint)
+        : previous.fingerprint === fingerprint;
+      if (!matches) throw new HttpError(409, 'Mã lưu đã được dùng cho dữ liệu khác.');
       return JSON.parse(previous.result);
     }
     const result = actions[action](db, user, input);
-    db.prepare('INSERT INTO requests VALUES (?, ?, ?, ?)').run(user.id, key, fingerprint, JSON.stringify(result));
+    db.prepare('INSERT INTO requests VALUES (?, ?, ?, ?)').run(user.id, key, fingerprint ?? passwordHash(payload), JSON.stringify(result));
     return result;
   });
 }
@@ -604,5 +626,8 @@ export function snapshot(db, user) {
       ...line, before: line.before === null ? null : show(line.before), counted: show(line.counted),
     }));
   }
-  return { user, locations, items, stock, deliveries, transfers, counts };
+  const accounts = user.role === 'manager' ? db.prepare(`
+    SELECT id, name, location_id FROM users WHERE role = 'staff' ORDER BY location_id, id
+  `).all() : null;
+  return { user, locations, items, stock, deliveries, transfers, counts, ...(accounts && { accounts }) };
 }
