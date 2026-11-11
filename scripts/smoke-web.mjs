@@ -370,8 +370,81 @@ try {
   await phone.getByLabel('Mật khẩu', { exact: true }).fill(updatedPassword);
   await phone.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
   await phone.getByRole('heading', { name: 'Phiếu kiểm kê', exact: true }).waitFor();
+
+  // Simulate the native bridge with storage shared by successive WebViews on one device.
+  async function nativeDevice() {
+    const context = await browser.newContext();
+    const vault = new Map();
+    let offline = false;
+    await context.route('**/api/**', route => offline ? route.abort() : route.continue());
+    await context.exposeBinding('testSecureStorage', (_, plugin, method, options) => {
+      assert.equal(plugin, 'SecureStorage');
+      assert.equal(options.sync, false);
+      if (method === 'internalGetItem') return { data: vault.get(options.prefixedKey) ?? null };
+      if (method === 'internalSetItem') {
+        assert.equal(options.access, 1);
+        assert.deepEqual(Object.keys(JSON.parse(options.data)).sort(),
+          JSON.parse(options.data).logout ? ['logout', 'token'] : ['token']);
+        vault.set(options.prefixedKey, options.data);
+      } else if (method === 'internalRemoveItem') vault.delete(options.prefixedKey);
+      else throw new Error('Unexpected native storage method');
+      return {};
+    });
+    await context.addInitScript(() => {
+      window.Capacitor = { isNativePlatform: () => true, nativePromise: window.testSecureStorage };
+    });
+    return { context, vault, setOffline: value => { offline = value; } };
+  }
+  const nativeFirst = await nativeDevice();
+  const nativeSecond = await nativeDevice();
+  let nativePage = await nativeFirst.context.newPage();
+  const otherNativePage = await nativeSecond.context.newPage();
+  await login(nativePage, 'norcross');
+  await login(otherNativePage, 'norcross');
+  assert.equal(await nativePage.evaluate(() => sessionStorage.getItem('bep-session')), null);
+  assert.equal(nativeFirst.vault.size, 1);
+  await nativePage.close();
+  nativeFirst.setOffline(true);
+  nativePage = await nativeFirst.context.newPage();
+  await nativePage.goto(url);
+  await nativePage.getByText(/Mất kết nối với máy chủ/).waitFor();
+  assert.equal(await nativePage.getByRole('heading', { name: 'Phiếu kiểm kê' }).count(), 0);
+  nativeFirst.setOffline(false);
+  await nativePage.evaluate(() => window.dispatchEvent(new Event('online')));
+  await nativePage.getByRole('heading', { name: 'Phiếu kiểm kê' }).waitFor();
+  nativeFirst.setOffline(true);
+  await nativePage.getByRole('button', { name: 'Đăng xuất' }).click();
+  await nativePage.getByText(/Chưa thể hoàn tất đăng xuất/).waitFor();
+  await nativePage.close();
+  nativeFirst.setOffline(false);
+  nativePage = await nativeFirst.context.newPage();
+  await nativePage.goto(url);
+  await nativePage.getByRole('heading', { name: 'Đăng nhập', exact: true }).waitFor();
+  assert.equal(nativeFirst.vault.size, 0);
+  await otherNativePage.getByRole('button', { name: 'Làm mới' }).click();
+  await otherNativePage.getByRole('heading', { name: 'Phiếu kiểm kê' }).waitFor();
+  await login(nativePage, 'norcross');
+
+  const resetNorcross = desktop.getByRole('row').filter({ hasText: 'Norcross' });
+  await resetNorcross.getByRole('button', { name: 'Đổi mật khẩu' }).click();
+  const norcrossPassword = randomUUID();
+  await passwordDialog.getByLabel('Mật khẩu mới', { exact: true }).fill(norcrossPassword);
+  await passwordDialog.getByLabel('Nhập lại mật khẩu mới').fill(norcrossPassword);
+  await passwordDialog.getByRole('button', { name: 'Lưu mật khẩu mới' }).click();
+  await passwordDialog.waitFor({ state: 'hidden' });
+  await nativePage.getByRole('button', { name: 'Làm mới' }).click();
+  await nativePage.getByRole('heading', { name: 'Đăng nhập', exact: true }).waitFor();
+  nativeSecond.setOffline(true);
+  await otherNativePage.reload();
+  await otherNativePage.getByText(/Mất kết nối với máy chủ/).waitFor();
+  nativeSecond.setOffline(false);
+  await otherNativePage.getByRole('button', { name: 'Thử lại' }).click();
+  await otherNativePage.getByRole('heading', { name: 'Đăng nhập', exact: true }).waitFor();
+  assert.equal(nativeFirst.vault.size + nativeSecond.vault.size, 0);
+  await nativeFirst.context.close();
+  await nativeSecond.context.close();
   assert.deepEqual(errors, []);
-  console.log('PASS mobile navigation, draft restoration, multi-group retry, pagination, stock, alerts, receipts, transfers and offline recovery.');
+  console.log('PASS inventory smoke and native session restore, offline logout and two-device revocation.');
 } finally {
   await browser?.close();
   await new Promise(resolve => server.close(resolve));

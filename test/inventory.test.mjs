@@ -29,11 +29,11 @@ async function fixture(t) {
     assert.equal(response.status, status, response.status === status ? path : await response.text());
     return response;
   }
-  async function login(username) {
-    const response = await request('login', { body: { username, password } });
-    const { token } = await response.json();
+  async function login(username, native = false) {
+    const response = await request('login', { body: { username, password, native } });
+    const { token, persistent } = await response.json();
     return {
-      token,
+      token, persistent,
       snapshot: async () => (await request('snapshot', { token })).json(),
       history: async (query = '') => (await request('history' + query, { token })).json(),
       post: async (path, body, status = 200, key = randomUUID()) =>
@@ -50,9 +50,9 @@ function stock(snapshot, location, item) {
 test('manager rotates a staff password and revokes only that account’s sessions', async t => {
   const { db, login, request } = await fixture(t);
   const manager = await login('manager');
-  const duluth = await login('duluth');
-  const secondDevice = await login('duluth');
-  const norcross = await login('norcross');
+  const duluth = await login('duluth', true);
+  const secondDevice = await login('duluth', true);
+  const norcross = await login('norcross', true);
   const snapshot = await manager.snapshot();
   assert.deepEqual(new Set(snapshot.accounts.map(account => account.location_id)), new Set(snapshot.locations.map(place => place.id)));
   assert.ok(snapshot.accounts.every(account => Object.keys(account).sort().join(',') === 'id,location_id,name'));
@@ -80,6 +80,28 @@ test('manager rotates a staff password and revokes only that account’s session
   const stored = db.prepare('SELECT fingerprint, result FROM requests WHERE actor = ? AND key = ?').get('manager', key);
   assert.match(stored.fingerprint, /^[a-f0-9]{32}:[a-f0-9]{128}$/);
   assert.deepEqual(JSON.parse(stored.result), { ok: true });
+});
+
+test('only native staff sessions persist and each can be logged out independently', async t => {
+  const { db, login, request } = await fixture(t);
+  const first = await login('duluth', true);
+  const second = await login('duluth', true);
+  const manager = await login('manager', true);
+  const web = await login('duluth');
+  assert.equal(first.persistent, true);
+  assert.equal(second.persistent, true);
+  assert.equal(manager.persistent, undefined);
+  assert.equal(web.persistent, undefined);
+  assert.equal(db.prepare('SELECT COUNT(*) AS total FROM sessions WHERE expires = 0').get().total, 2);
+
+  db.exec('UPDATE sessions SET expires = 1 WHERE expires > 0');
+  await login('norcross'); // Expired-session cleanup must retain native staff sessions.
+  await request('snapshot', { token: web.token, status: 401 });
+  await request('snapshot', { token: manager.token, status: 401 });
+  await first.snapshot();
+  await request('logout', { token: first.token, method: 'POST' });
+  await request('snapshot', { token: first.token, status: 401 });
+  await second.snapshot();
 });
 
 test('standalone catalog creation enables scoped weekly counts in cases', async t => {

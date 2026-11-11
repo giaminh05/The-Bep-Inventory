@@ -78,7 +78,7 @@ export function inventoryServer({ db, allowedOrigins = ['capacitor://localhost',
         return json(res, 200, { ok: true });
       }
       if (req.method === 'POST' && path === '/api/login') {
-        const { username, password } = await readJson(req, 4096);
+        const { username, password, native = false } = await readJson(req, 4096);
         if (typeof username !== 'string' || typeof password !== 'string' || username.length > 80 || password.length > 256) {
           throw new HttpError(400, 'Thông tin đăng nhập không hợp lệ.');
         }
@@ -94,16 +94,20 @@ export function inventoryServer({ db, allowedOrigins = ['capacitor://localhost',
           throw new HttpError(401, 'Sai tên đăng nhập hoặc mật khẩu.');
         }
         const token = randomBytes(32).toString('hex');
-        db.prepare('DELETE FROM sessions WHERE expires <= ?').run(time);
-        db.prepare('INSERT INTO sessions VALUES (?, ?, ?)').run(digest(token), user.id, time + sessionDuration);
-        return json(res, 200, { token });
+        const persistent = native === true && user.role === 'staff';
+        db.prepare('DELETE FROM sessions WHERE expires > 0 AND expires <= ?').run(time);
+        const session = db.prepare(`
+          INSERT INTO sessions SELECT ?, id, ? FROM users WHERE id = ? AND password = ?
+        `).run(digest(token), persistent ? 0 : time + sessionDuration, user.id, user.password);
+        if (!session.changes) throw new HttpError(401, 'Mật khẩu đã thay đổi. Vui lòng đăng nhập lại.');
+        return json(res, 200, { token, ...(persistent && { persistent }) });
       }
       if (!path.startsWith('/api/')) throw new HttpError(404, 'Không tìm thấy trang.');
       const token = /^Bearer ([a-f0-9]{64})$/.exec(req.headers.authorization || '')?.[1];
       const tokenHash = token && digest(token);
       const user = tokenHash && db.prepare(`
         SELECT users.id, users.name, users.role, users.location_id
-        FROM sessions JOIN users ON users.id = user_id WHERE token_hash = ? AND expires > ?
+        FROM sessions JOIN users ON users.id = user_id WHERE token_hash = ? AND (expires = 0 OR expires > ?)
       `).get(tokenHash, Date.now());
       if (!user) throw new HttpError(401, 'Phiên hết hạn. Vui lòng đăng nhập.');
       if (req.method === 'POST' && path === '/api/logout') {
@@ -128,7 +132,7 @@ export function inventoryServer({ db, allowedOrigins = ['capacitor://localhost',
       if (req.method === 'POST' && action) {
         const input = await readJson(req, ['receipts', 'delivery-receipts-all'].includes(action) ? photoLimit : 65536);
         // A password reset can revoke this session while the request body is arriving.
-        if (!db.prepare('SELECT 1 FROM sessions WHERE token_hash = ? AND expires > ?').get(tokenHash, Date.now())) {
+        if (!db.prepare('SELECT 1 FROM sessions WHERE token_hash = ? AND (expires = 0 OR expires > ?)').get(tokenHash, Date.now())) {
           throw new HttpError(401, 'Phiên hết hạn. Vui lòng đăng nhập.');
         }
         const result = applyAction(db, user, action, req.headers['idempotency-key'], input);
