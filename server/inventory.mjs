@@ -426,7 +426,7 @@ const actions = {
   },
 };
 
-export function applyAction(db, user, action, key, input) {
+export function applyAction(db, user, action, key, input, managerId = null) {
   if (!Object.hasOwn(actions, action)) throw new HttpError(404, 'Không tìm thấy thao tác.');
   if (typeof key !== 'string' || !/^[A-Za-z0-9-]{16,100}$/.test(key)) {
     throw new HttpError(400, 'Thiếu mã chống lưu trùng hợp lệ.');
@@ -439,7 +439,7 @@ export function applyAction(db, user, action, key, input) {
       throw new HttpError(400, 'Mật khẩu mới phải có từ 12 đến 256 ký tự.');
     }
   }
-  const payload = action + '\n' + JSON.stringify(input);
+  const payload = (managerId === null ? '' : JSON.stringify(managerId) + '\n') + action + '\n' + JSON.stringify(input);
   const fingerprint = resetsPassword ? null : digest(payload);
   return transaction(db, () => {
     const previous = db.prepare('SELECT fingerprint, result FROM requests WHERE actor = ? AND key = ?').get(user.id, key);
@@ -452,6 +452,9 @@ export function applyAction(db, user, action, key, input) {
     }
     const result = actions[action](db, user, input);
     db.prepare('INSERT INTO requests VALUES (?, ?, ?, ?)').run(user.id, key, fingerprint ?? passwordHash(payload), JSON.stringify(result));
+    if (managerId !== null) {
+      db.prepare('INSERT INTO delegated_actions VALUES (?, ?, ?, ?, ?)').run(managerId, user.id, key, action, now());
+    }
     return result;
   });
 }

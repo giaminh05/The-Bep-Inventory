@@ -19,7 +19,7 @@ const sections = {
   transfers: ['Chuyển kho', 'Theo dõi hàng xuất, hàng đang đi và chênh lệch thực nhận.'],
   history: ['Nhật ký', 'Xem số dư sau mỗi giao dịch, người thực hiện và thời gian Atlanta.'],
   report: ['Báo cáo tuần', 'Xem lượng tiêu hao theo tuần Atlanta và giá trị tồn hiện tại.'],
-  accounts: ['Tài khoản', 'Đổi mật khẩu tài khoản nhân viên tại các địa điểm.'],
+  accounts: ['Tài khoản', 'Chuyển sang tài khoản nhân viên hoặc đổi mật khẩu.'],
 };
 export const brand = `<div class="brand"><img src="./icon.svg" alt=""><div><strong>The Bếp Teahouse</strong><small>Inventory</small></div></div>`;
 export const option = (value, label, selected) =>
@@ -93,7 +93,14 @@ export function renderDashboard(state) {
         </select>` : badge(locations[data.user.location_id])}
         ${button('Làm mới', 'refresh')}
       </div></div>
-      <header class="heading"><div><h1>${title}</h1><p>${description}</p></div>${create[page] ?? ''}</header>
+      ${state.staffAccount ? `<div class="actions">
+        <strong>Đang dùng tài khoản ${esc(data.user.id)} với phiên quản lý</strong>
+        <select id="staff-account-switch" aria-label="Chuyển tài khoản nhân viên">
+          ${state.switchAccounts.map(account => option(account.id, locations[account.location_id] + ' · ' + account.id, state.staffAccount)).join('')}
+        </select>
+        ${button('Về quản lý', 'switch-staff')}
+      </div>` : ''}
+      <header class="heading"><div><h1 tabindex="-1">${title}</h1><p>${description}</p></div>${create[page] ?? ''}</header>
       ${body[page]()}
     </section></div>`;
 }
@@ -104,7 +111,8 @@ function accountsView(accounts, locations) {
     <thead><tr><th>Tài khoản</th><th>Địa điểm</th><th>Thao tác</th></tr></thead>
     <tbody>${accounts.map(account => `<tr><td><strong>${esc(account.name)}</strong><small>${esc(account.id)}</small></td>
       <td>${esc(locations[account.location_id] ?? '—')}</td>
-      <td>${button('Đổi mật khẩu', 'staff-password', account.id)}</td></tr>`).join('')}</tbody>
+      <td><div class="actions">${button('Chuyển tài khoản', 'switch-staff', account.id)}
+        ${button('Đổi mật khẩu', 'staff-password', account.id)}</div></td></tr>`).join('')}</tbody>
   </table></div>`;
 }
 

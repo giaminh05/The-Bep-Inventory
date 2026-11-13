@@ -443,6 +443,15 @@ try {
   assert.equal(nativeFirst.vault.size + nativeSecond.vault.size, 0);
   await nativeFirst.context.close();
   await nativeSecond.context.close();
+  await desktop.getByRole('row').filter({ hasText: 'Duluth' }).getByRole('button', { name: 'Chuyển tài khoản' }).click();
+  const accountSwitch = desktop.getByRole('combobox', { name: 'Chuyển tài khoản nhân viên' });
+  await accountSwitch.waitFor();
+  assert.equal(await accountSwitch.inputValue(), 'duluth');
+  assert.equal(await desktop.getByRole('button', { name: 'Tài khoản', exact: true }).count(), 0);
+  await accountSwitch.selectOption('johns-creek');
+  await desktop.getByText('Đang dùng tài khoản johns-creek với phiên quản lý').waitFor();
+  await desktop.getByRole('button', { name: 'Về quản lý' }).click();
+  await desktop.getByRole('heading', { name: 'Tài khoản', exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log('PASS inventory smoke and native session restore, offline logout and two-device revocation.');
 } finally {

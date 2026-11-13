@@ -58,7 +58,7 @@ export function inventoryServer({ db, allowedOrigins = ['capacitor://localhost',
       if (path.startsWith('/api/') && origin && allowedOrigins.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
         res.setHeader('Vary', 'Origin');
-        res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Idempotency-Key');
+        res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Idempotency-Key, X-Staff-Account');
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
       }
       if (req.method === 'OPTIONS' && path.startsWith('/api/')) {
@@ -105,14 +105,23 @@ export function inventoryServer({ db, allowedOrigins = ['capacitor://localhost',
       if (!path.startsWith('/api/')) throw new HttpError(404, 'Không tìm thấy trang.');
       const token = /^Bearer ([a-f0-9]{64})$/.exec(req.headers.authorization || '')?.[1];
       const tokenHash = token && digest(token);
-      const user = tokenHash && db.prepare(`
+      const signedInUser = tokenHash && db.prepare(`
         SELECT users.id, users.name, users.role, users.location_id
         FROM sessions JOIN users ON users.id = user_id WHERE token_hash = ? AND (expires = 0 OR expires > ?)
       `).get(tokenHash, Date.now());
-      if (!user) throw new HttpError(401, 'Phiên hết hạn. Vui lòng đăng nhập.');
+      if (!signedInUser) throw new HttpError(401, 'Phiên hết hạn. Vui lòng đăng nhập.');
       if (req.method === 'POST' && path === '/api/logout') {
         db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash);
         return json(res, 200, { ok: true });
+      }
+      const staffAccount = req.headers['x-staff-account'];
+      let user = signedInUser;
+      if (staffAccount !== undefined) {
+        if (signedInUser.role !== 'manager') throw new HttpError(403, 'Chỉ quản lý được chuyển tài khoản.');
+        user = db.prepare(`
+          SELECT id, name, role, location_id FROM users WHERE id = ? AND role = 'staff' AND location_id IS NOT NULL
+        `).get(staffAccount);
+        if (!user) throw new HttpError(404, 'Không tìm thấy tài khoản nhân viên.');
       }
       if (req.method === 'GET' && path === '/api/snapshot') return json(res, 200, snapshot(db, user));
       if (req.method === 'GET' && path === '/api/report') {
@@ -135,7 +144,8 @@ export function inventoryServer({ db, allowedOrigins = ['capacitor://localhost',
         if (!db.prepare('SELECT 1 FROM sessions WHERE token_hash = ? AND (expires = 0 OR expires > ?)').get(tokenHash, Date.now())) {
           throw new HttpError(401, 'Phiên hết hạn. Vui lòng đăng nhập.');
         }
-        const result = applyAction(db, user, action, req.headers['idempotency-key'], input);
+        const result = applyAction(db, user, action, req.headers['idempotency-key'], input,
+          staffAccount === undefined ? null : signedInUser.id);
         return json(res, 200, result);
       }
       throw new HttpError(404, 'Không tìm thấy yêu cầu.');
