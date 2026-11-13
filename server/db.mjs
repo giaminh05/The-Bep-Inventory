@@ -109,6 +109,15 @@ export function openDatabase(path, { demo = false } = {}) {
       actor TEXT NOT NULL REFERENCES users(id), key TEXT NOT NULL, fingerprint TEXT NOT NULL,
       result TEXT NOT NULL, PRIMARY KEY(actor, key)
     );
+    CREATE TABLE IF NOT EXISTS delegated_actions (
+      manager_id TEXT NOT NULL REFERENCES users(id),
+      staff_id TEXT NOT NULL REFERENCES users(id),
+      request_key TEXT NOT NULL,
+      action TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (staff_id, request_key),
+      FOREIGN KEY (staff_id, request_key) REFERENCES requests(actor, key)
+    );
     CREATE INDEX IF NOT EXISTS movements_by_location ON movements(location_id, id);
     CREATE INDEX IF NOT EXISTS receipts_by_line ON receipts(line_id);
     CREATE INDEX IF NOT EXISTS transfers_by_source ON transfers(source);

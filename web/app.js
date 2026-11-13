@@ -123,6 +123,8 @@ async function secureSession(method, record) {
 }
 
 async function clearSession() {
+  state.switchAccounts = null;
+  state.staffAccount = null;
   state.token = null;
   state.persistent = state.pendingLogout = false;
   state.sessionMessage = '';
@@ -187,12 +189,13 @@ async function restoreNativeSession() {
   }
 }
 
-async function api(path, { method = 'GET', data, key, binary = false } = {}) {
+async function api(path, { method = 'GET', data, key, binary = false, staffAccount = state.staffAccount } = {}) {
   const headers = {};
   const token = state.token;
   if (token) headers.Authorization = 'Bearer ' + token;
   if (data !== undefined) headers['Content-Type'] = 'application/json';
   if (key) headers['Idempotency-Key'] = key;
+  if (staffAccount) headers['X-Staff-Account'] = staffAccount;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 20000);
   try {
@@ -243,6 +246,32 @@ async function refresh() {
 
 function getItem(id) {
   return state.data.items.find(item => item.id === id);
+}
+
+async function switchStaffAccount(id) {
+  const accounts = state.switchAccounts ?? state.data?.accounts;
+  if (!accounts || (id && !accounts.some(account => account.id === id))) return;
+  const token = state.token;
+  busy = true;
+  try {
+    const data = await api('snapshot', { staffAccount: id });
+    if (state.token !== token) return;
+    ++readVersion;
+    state.switchAccounts = id ? accounts : null;
+    state.staffAccount = id;
+    state.data = data;
+    state.page = id ? 'counts' : 'accounts';
+    state.location = state.category = state.historyQuery = state.reportWeek = '';
+    state.lowOnly = false;
+    state.draft = state.report = null;
+    state.history = { entries: [], next: null };
+    listStates.clear();
+    if (id) state.category = restoreCountGroup(data.user.location_id);
+    draw();
+    app.querySelector('h1')?.focus();
+  } finally {
+    busy = false;
+  }
 }
 
 function getLocation(id) {
@@ -475,7 +504,9 @@ function staffPasswordForm(id) {
 }
 
 function draftScope() {
-  return ['bep-count-draft', apiBase, state.data.items[0]?.id, state.data.user.id];
+  const scope = ['bep-count-draft', apiBase, state.data.items[0]?.id, state.data.user.id];
+  if (state.staffAccount) scope.push('manager-switch');
+  return scope;
 }
 
 function draftKey(place = countLocation(), category = state.category) {
@@ -961,6 +992,12 @@ app.addEventListener('submit', async event => {
 });
 
 app.addEventListener('change', async event => {
+  if (event.target.id === 'staff-account-switch') {
+    const id = event.target.value;
+    event.target.value = state.staffAccount;
+    if (!busy && id !== state.staffAccount) await switchStaffAccount(id).catch(error => notify(error.message));
+    return;
+  }
   if (event.target.id === 'location-filter') {
     state.location = event.target.value;
     state.category = state.page === 'counts' ? restoreCountGroup(countLocation()) : '';
@@ -1082,6 +1119,7 @@ dialog.addEventListener('close', () => {
 });
 
 const actions = {
+  'switch-staff': switchStaffAccount,
   'restore-session': restoreNativeSession,
   'staff-password': staffPasswordForm,
   page: async id => {

@@ -47,6 +47,30 @@ function stock(snapshot, location, item) {
   return snapshot.stock.find(row => row.location_id === location && row.item_id === item);
 }
 
+test('manager switches to staff permissions and delegated writes record both accounts', async t => {
+  const { db, login, request } = await fixture(t);
+  const manager = await login('manager');
+  const staff = await login('duluth');
+  const headers = { 'X-Staff-Account': 'duluth' };
+  await request('snapshot', { token: staff.token, headers, status: 403 });
+  await request('snapshot', { token: manager.token, headers: { 'X-Staff-Account': 'manager' }, status: 404 });
+  const scoped = await (await request('snapshot', { token: manager.token, headers })).json();
+  assert.equal(scoped.user.id, 'duluth');
+  assert.equal(scoped.accounts, undefined);
+  assert.ok(scoped.stock.length && scoped.stock.every(row => row.location_id === 'duluth'));
+  const key = randomUUID();
+  await request('staff-passwords', { token: manager.token, headers, key, body: {}, status: 403 });
+  const body = { location: 'duluth', category: 'Trà', performedBy: 'Kiểm kê',
+    lines: [{ item: 'green-tea', quantity: '24', unit: 'bag', revision: stock(scoped, 'duluth', 'green-tea').revision }] };
+  await request('count-sheets', { token: manager.token, headers, key, body: { ...body, location: 'norcross' }, status: 403 });
+  const send = () => request('count-sheets', { token: manager.token, headers, key, body });
+  assert.deepEqual(await (await send()).json(), await (await send()).json());
+  await request('count-sheets', { token: staff.token, key, body, status: 409 });
+  const audit = db.prepare('SELECT manager_id, staff_id, action FROM delegated_actions WHERE request_key = ?').get(key);
+  assert.deepEqual({ ...audit }, { manager_id: 'manager', staff_id: 'duluth', action: 'count-sheets' });
+  assert.equal((await manager.snapshot()).user.role, 'manager');
+});
+
 test('manager rotates a staff password and revokes only that account’s sessions', async t => {
   const { db, login, request } = await fixture(t);
   const manager = await login('manager');
