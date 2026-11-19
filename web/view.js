@@ -27,11 +27,13 @@ export const option = (value, label, selected) =>
 const badge = (text, tone = '') => `<span class="badge ${tone}">${esc(text)}</span>`;
 export const button = (text, action, id = '', primary = false) =>
   `<button type="button" class="button${primary ? ' primary' : ''}" data-action="${esc(action)}" data-id="${esc(id)}">${esc(text)}</button>`;
-const empty = text => `<p class="empty">${esc(text)}</p>`;
+const empty = (text, action = '', hint = '') => `<div class="empty"><strong>${esc(text)}</strong>${hint ? `<p>${esc(hint)}</p>` : ''}${action}</div>`;
+const navPaths = { stock: 'M4 7h16v14H4z M3 3h18v4H3z M10 11h4', counts: 'M9 4H5v17h14V4h-4 M9 3h6v4H9z M8 12l2 2 5-5 M8 18h8', deliveries: 'M3 7h11v11H3z M14 11h4l3 4v3h-7 M6 7V4h9 M7 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4 M18 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4', transfers: 'M4 7h15l-4-4 M20 17H5l4 4 M19 7l-4 4 M5 17l4-4', history: 'M3 11a9 9 0 1 1 3 8 M3 4v7h7 M12 7v5l3 2', report: 'M4 21V3h16v18z M8 16v-3 M12 16V8 M16 16v-5', accounts: 'M16 21v-2a4 4 0 0 0-8 0v2 M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M20 21v-2a4 4 0 0 0-3-4' };
+const navIcon = id => `<svg class="nav-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${navPaths[id]}"></path></svg>`;
 const signed = value => (value > 0 ? '+' : '') + number(value);
 export const listControls = (key, label = 'Tìm mặt hàng') => `<div class="list-controls" data-list-controls="${esc(key)}">
   ${label ? `<label>${esc(label)}<input type="search" autocomplete="off" data-list-search></label>` : ''}
-  <small data-list-empty role="status" hidden>Không có kết quả</small>
+  <small data-list-empty role="status" hidden>Không có kết quả. Thử tên khác hoặc xóa nội dung tìm kiếm.</small>
   <div class="list-pages" data-list-pages hidden><button class="button" type="button" data-list-prev>Trước</button>
   <small data-list-status aria-live="polite"></small><button class="button" type="button" data-list-next>Sau</button></div>
 </div>`;
@@ -68,7 +70,7 @@ export function renderDashboard(state) {
   const create = { stock: manager ? button('Tạo mặt hàng mới', 'create-item', '', true) : '',
     deliveries: manager ? button('Tạo đơn giao', 'delivery', '', true) : '', transfers: button('Xuất chuyển kho', 'dispatch', '', true) };
   const tabs = Object.entries(sections).filter(([id]) => manager || ['counts', 'deliveries', 'transfers'].includes(id)).map(([id, [label]]) =>
-    `<button type="button" data-action="page" data-id="${id}" ${page === id ? 'aria-current="page"' : ''}>${label}</button>`).join('');
+    `<button type="button" data-action="page" data-id="${id}" ${page === id ? 'aria-current="page"' : ''}>${navIcon(id)}<span>${label}</span></button>`).join('');
   const body = {
     stock: () => stockView(stock, deliveries, transfers, items, locations, state.lowOnly, manager, manager && !location),
     counts: () => countView(state, stock, items, locations),
@@ -79,12 +81,12 @@ export function renderDashboard(state) {
     accounts: () => accountsView(data.accounts ?? [], locations),
   };
   return `<div class="shell"><aside class="sidebar">${brand}
-    <nav aria-label="Chức năng kho" ${manager ? 'data-manager-nav' : ''}>${tabs}</nav>
-    ${manager ? '<small class="nav-scroll-hint" aria-hidden="true" hidden>↔ Cuộn ngang để xem thêm tab</small>' : ''}
+    ${manager ? '<button class="menu-toggle button" type="button" data-action="toggle-menu" aria-controls="inventory-nav" aria-expanded="false">Chức năng</button>' : ''}
+    <nav id="inventory-nav" aria-label="Chức năng kho" ${manager ? 'data-manager-nav' : ''}>${tabs}</nav>
     <div class="account"><strong>${esc(data.user.name)}</strong><small>${manager ? 'Quản lý' : 'Nhân viên'}</small>
       <button type="button" data-action="logout">Đăng xuất</button>
     </div></aside>
-    <section class="content"><div class="topline">
+    <section class="content"><div class="page-header"><div class="topline">
       <span class="eyebrow">${manager ? 'Vận hành kho' : 'Ứng dụng nhân viên'}</span>
       <div class="top-actions">
         ${manager ? `<select id="location-filter" aria-label="Lọc địa điểm">
@@ -93,25 +95,26 @@ export function renderDashboard(state) {
         </select>` : badge(locations[data.user.location_id])}
         ${button('Làm mới', 'refresh')}
       </div></div>
-      ${state.staffAccount ? `<div class="actions">
+      <header class="heading"><div><h1 tabindex="-1">${title}</h1><p>${description}</p></div>${create[page] ?? ''}</header></div>
+      ${state.staffAccount ? `<div class="actions account-context">
         <strong>Đang dùng tài khoản ${esc(data.user.id)} với phiên quản lý</strong>
         <select id="staff-account-switch" aria-label="Chuyển tài khoản nhân viên">
           ${state.switchAccounts.map(account => option(account.id, locations[account.location_id] + ' · ' + account.id, state.staffAccount)).join('')}
         </select>
         ${button('Về quản lý', 'switch-staff')}
       </div>` : ''}
-      <header class="heading"><div><h1 tabindex="-1">${title}</h1><p>${description}</p></div>${create[page] ?? ''}</header>
+      <div id="page-feedback" class="page-feedback" role="status" hidden></div>
       ${body[page]()}
     </section></div>`;
 }
 
 function accountsView(accounts, locations) {
   if (!accounts.length) return `<div class="panel">${empty('Chưa có tài khoản nhân viên.')}</div>`;
-  return `<div class="panel table-wrap" tabindex="0" aria-label="Tài khoản nhân viên"><table>
+  return `<div class="panel table-wrap mobile-summary" tabindex="0" aria-label="Tài khoản nhân viên"><table>
     <thead><tr><th>Tài khoản</th><th>Địa điểm</th><th>Thao tác</th></tr></thead>
     <tbody>${accounts.map(account => `<tr><td><strong>${esc(account.name)}</strong><small>${esc(account.id)}</small></td>
-      <td>${esc(locations[account.location_id] ?? '—')}</td>
-      <td><div class="actions">${button('Chuyển tài khoản', 'switch-staff', account.id)}
+      <td data-label="Địa điểm">${esc(locations[account.location_id] ?? '—')}</td>
+      <td data-label="Thao tác"><div class="actions">${button('Chuyển tài khoản', 'switch-staff', account.id)}
         ${button('Đổi mật khẩu', 'staff-password', account.id)}</div></td></tr>`).join('')}</tbody>
   </table></div>`;
 }
@@ -185,7 +188,7 @@ function stockView(stock, deliveries, transfers, items, locations, lowOnly, mana
     ${listControls('stock')}${rows ? `<div class="table-wrap stock-table" tabindex="0" aria-label="Bảng số dư">
       <table><thead><tr>${overview ? '<th>Mặt hàng</th><th>Đang có</th><th>Ngưỡng tổng</th><th>Cảnh báo</th><th>Thao tác</th>' :
         '<th>Mặt hàng</th><th>Địa điểm</th><th>Đang có</th><th>Ngưỡng</th><th>Trạng thái</th><th>Thao tác</th>'}</tr></thead>
-      <tbody>${rows}</tbody></table></div>` : empty('Không có mặt hàng trong bộ lọc này.')}
+      <tbody>${rows}</tbody></table></div>` : empty('Không có mặt hàng trong bộ lọc này.', lowOnly ? button('Xem tất cả mặt hàng', 'all-stock') : '', 'Thử chọn địa điểm khác hoặc điều chỉnh bộ lọc.')}
     </section>`;
 }
 
@@ -216,7 +219,7 @@ function orderInvoices(delivery, items) {
 }
 
 function deliveriesView(deliveries, items, locations, manager) {
-  if (!deliveries.length) return `<div class="panel">${empty('Chưa có đơn giao ở địa điểm này.')}</div>`;
+  if (!deliveries.length) return `<div class="panel">${empty('Chưa có đơn giao ở địa điểm này.', manager ? button('Tạo đơn giao', 'delivery') : '', 'Đơn giao mới sẽ xuất hiện tại đây.')}</div>`;
   return `<div class="tickets" data-list>${listControls('deliveries', 'Tìm đơn giao hoặc mặt hàng')}${deliveries.map(delivery => {
     const open = delivery.lines.some(line => line.outstanding);
     const partial = delivery.lines.some(line => line.received);
@@ -224,7 +227,7 @@ function deliveriesView(deliveries, items, locations, manager) {
     return `<article class="ticket" data-list-row data-search="${esc([delivery.supplier, locations[delivery.location_id],
       ...delivery.lines.map(line => itemSearch(items[line.item_id]))].join(' '))}"><header class="ticket-head"><div><h2>${esc(delivery.supplier)}</h2>
       <small>${esc(locations[delivery.location_id])} · ${date(delivery.created_at)}</small></div>
-      ${open ? badge(partial ? 'Đã nhận một phần' : 'Chờ giao', 'warn') : badge('Đã nhận đủ')}</header>
+      ${open ? badge(partial ? 'Đã nhận một phần' : 'Chờ giao', partial ? 'partial' : 'warn') : badge('Đã nhận đủ')}</header>
       ${delivery.note ? `<p class="muted">${esc(delivery.note)}</p>` : ''}
       ${manager ? orderInvoices(delivery, items) : ''}
       ${open && canReceive ? button('Xác nhận cả lô', 'receive-delivery-all', delivery.id, true) : ''}
@@ -252,14 +255,14 @@ export function transferGroups(transfers) {
 }
 
 function transfersView(transfers, items, locations, user) {
-  if (!transfers.length) return `<div class="panel">${empty('Chưa có phiếu chuyển ở địa điểm này.')}</div>`;
+  if (!transfers.length) return `<div class="panel">${empty('Chưa có phiếu chuyển ở địa điểm này.', '', 'Chọn Xuất chuyển kho để chuyển hàng giữa các địa điểm.')}</div>`;
   return `<div class="tickets" data-list>${listControls('transfers', 'Tìm phiếu chuyển hoặc mặt hàng')}${transferGroups(transfers).map(group => {
     const first = group.lines[0];
     const canReceive = user.role === 'manager' || (first.manager_created && first.destination === user.location_id);
     const open = group.lines.some(line => !line.closed_at);
     const discrepancy = group.lines.some(line => line.discrepancy);
-    const status = open ? badge('Đang vận chuyển', 'warn') :
-      badge(discrepancy ? 'Đã đóng · Có chênh lệch' : 'Đã nhận đủ', discrepancy ? 'warn' : '');
+    const status = open ? badge('Đang vận chuyển', 'partial') :
+      badge(discrepancy ? 'Đã đóng · Có chênh lệch' : 'Đã nhận đủ', discrepancy ? 'danger' : '');
     return `<article class="ticket" data-list-row data-search="${esc([locations[first.source], locations[first.destination],
       ...group.lines.map(line => itemSearch(items[line.item_id]))].join(' '))}"><header class="ticket-head"><div>
       <h2>${group.lines.length === 1 ? esc(items[first.item_id].name) : 'Phiếu chuyển · ' + group.lines.length + ' mặt hàng'}</h2>
@@ -292,13 +295,13 @@ function historyView(history, items, locations, query) {
     const item = items[row.item_id];
     const unit = esc(unitLabel(item.base_unit));
     return `<tr data-list-row data-search="${esc([itemSearch(item), row.actor_name, locations[row.location_id], eventNames[row.type], row.note].join(' '))}"><td>${date(row.created_at)}<small>${esc(row.actor_name)}</small></td>
-      <td>${eventNames[row.type]}</td><td>${esc(item.name)}<small>${esc(locations[row.location_id])}</small></td>
-      <td>${row.delta === null ? '—' : signed(row.delta) + ' ' + unit}</td>
-      <td>${row.balance === null ? 'Chưa biết' : number(row.balance) + ' ' + unit}</td><td>
+      <td data-label="Thao tác">${eventNames[row.type]}</td><td data-label="Mặt hàng">${esc(item.name)}<small>${esc(locations[row.location_id])}</small></td>
+      <td data-label="Thay đổi">${row.delta === null ? '—' : signed(row.delta) + ' ' + unit}</td>
+      <td data-label="Số dư">${row.balance === null ? 'Chưa biết' : number(row.balance) + ' ' + unit}</td><td data-label="Ghi chú">
       ${row.already_counted !== null ? 'Đã tính trong phiếu: ' + number(row.already_counted) + ' ' + unit + ' · ' : ''}
       ${esc(row.note) || '—'}</td></tr>`;
   }).join('');
-  return `<div class="panel" data-list>${search}${listControls('history', null)}<div class="table-wrap" tabindex="0" aria-label="Bảng lịch sử"><table>
+  return `<div class="panel" data-list>${search}${listControls('history', null)}<div class="table-wrap mobile-summary" tabindex="0" aria-label="Bảng lịch sử"><table>
     <thead><tr><th>Thời gian</th><th>Thao tác</th><th>Mặt hàng</th><th>Thay đổi</th><th>Số dư</th><th>Ghi chú</th></tr></thead>
     <tbody>${rows}</tbody></table></div></div>${history.next ? `<div class="pager">${button('Xem thêm', 'more-history')}</div>` : ''}`;
 }
@@ -343,7 +346,7 @@ function countView(state, stock, items, locations) {
       }).join('')}</div>
       <label>Người kiểm kê<input id="count-performed" maxlength="150" value="${esc(draft.performedBy)}"></label>
       <label>Ghi chú<textarea id="count-note" rows="2" maxlength="500">${esc(draft.note)}</textarea></label>
-      <div class="count-footer"><span id="count-progress" aria-live="polite"></span>${button('Kiểm tra và gửi', 'submit-count', '', true)}</div>
+      <div class="count-footer"><div><strong id="count-progress" aria-live="polite"></strong><small id="draft-status" role="status">Nháp được giữ trên thiết bị này.</small></div>${button('Kiểm tra và gửi', 'submit-count', '', true)}</div>
       <small>Lần gửi này gồm các nhóm đã đếm tại địa điểm đang chọn.</small>` : ''}
   </section><div class="tickets count-history" data-list><h2>Phiếu đã gửi gần đây</h2>
     ${history ? listControls('count-history', 'Tìm phiếu hoặc mặt hàng') + history : empty('Chưa có phiếu kiểm kê.')}</div>`;
@@ -352,7 +355,7 @@ function countView(state, stock, items, locations) {
 const usd = value => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
 
 function reportView(state, items, locations) {
-  if (!state.report) return empty('Đang tải báo cáo…');
+  if (!state.report) return `<div class="panel skeleton-panel" role="status" aria-label="Đang tải báo cáo"><p>Đang tải báo cáo…</p><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>`;
   const { rows, week } = state.report;
   const priced = rows.filter(row => row.value !== null);
   const missingPrices = rows.filter(row => row.onHand > 0 && items[row.item_id].cost === null).length;
@@ -367,7 +370,7 @@ function reportView(state, items, locations) {
       <small>${missingPrices} dòng có tồn chưa có giá · ${unknown} dòng chưa biết tồn</small></div>
       <label>Tuần bắt đầu<input id="report-week" type="date" value="${esc(week)}"></label></header>
     <p class="report-note hint">Cuối kỳ là lần kiểm kê cuối cùng trong tuần đã chọn. Đầu kỳ là lần kiểm kê ngay trước đó của cùng mặt hàng tại cùng địa điểm, hoặc số dư nhập từ Sheet nếu đây là lần đầu. Giờ hiển thị theo Atlanta. Dòng thiếu mốc hiển thị “—”.</p>
-    ${listControls('report')}<div class="table-wrap" tabindex="0" aria-label="Báo cáo tồn và tiêu hao"><table>
+    ${listControls('report')}<p class="scroll-hint hint">Cuộn ngang để so sánh các cột. Mặt hàng luôn hiển thị bên trái.</p><div class="table-wrap report-table" tabindex="0" aria-label="Báo cáo tồn và tiêu hao"><table>
       <thead><tr><th>Mặt hàng</th><th>Đầu kỳ</th><th>Cuối kỳ</th><th>Đã dùng</th><th>Tồn hiện tại</th><th>Đơn giá USD</th><th>Giá trị tồn</th></tr></thead>
       <tbody>${rows.map(row => {
         const item = items[row.item_id];

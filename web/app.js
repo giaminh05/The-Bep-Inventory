@@ -14,7 +14,7 @@ sessionStorage.removeItem('bep-manager-session');
 sessionStorage.removeItem('bep-staff-session');
 const state = { token, data: null, page: 'stock', location: '', lowOnly: false,
   history: { entries: [], next: null }, historyQuery: '', category: '', draft: null, report: null, reportWeek: '',
-  sessionMessage: '', pendingLogout: false, persistent: false };
+  sessionMessage: '', pendingLogout: false, persistent: false, loadError: '', menuOpen: false };
 let restoring = false;
 let signingIn = false;
 let toastTimer;
@@ -26,7 +26,6 @@ let busy = false;
 let readVersion = 0;
 const listStates = new Map();
 const pageSize = 20;
-const mobileNav = matchMedia('(max-width: 650px)');
 const searchText = value => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').trim();
 
 function setupLists(root, saved = new Map()) {
@@ -67,35 +66,51 @@ function setupLists(root, saved = new Map()) {
   }
 }
 
-function notify(message) {
+function notify(message, tone = '') {
   toast.textContent = message;
+  toast.classList.toggle('toast-error', tone === 'error');
   toast.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { toast.hidden = true; }, 6000);
 }
 
-function updateManagerNav(scroll = 0, focusedTab) {
+function updateManagerNav(focusedTab) {
   const nav = app.querySelector('[data-manager-nav]');
-  if (!nav || !mobileNav.matches) return;
-  const active = nav.querySelector('[aria-current="page"]');
+  if (!nav) return;
+  nav.classList.toggle('is-open', state.menuOpen);
+  app.querySelector('.menu-toggle')?.setAttribute('aria-expanded', String(state.menuOpen));
   if (focusedTab) nav.querySelector(`[data-id="${CSS.escape(focusedTab)}"]`)?.focus({ preventScroll: true });
-  nav.scrollLeft = scroll;
-  const bounds = nav.getBoundingClientRect();
-  const tab = active.getBoundingClientRect();
-  const padding = 4;
-  if (tab.left < bounds.left + padding) nav.scrollLeft += tab.left - bounds.left - padding;
-  else if (tab.right > bounds.right - padding) nav.scrollLeft += tab.right - bounds.right + padding;
-  app.querySelector('.nav-scroll-hint').hidden = nav.scrollWidth <= nav.clientWidth;
 }
 
-window.addEventListener('resize', () => updateManagerNav(app.querySelector('[data-manager-nav]')?.scrollLeft));
+function updateFeedback() {
+  const feedback = app.querySelector('#page-feedback');
+  if (!feedback) return;
+  feedback.hidden = !state.loadError;
+  app.querySelectorAll('.skeleton-panel').forEach(panel => { panel.hidden = Boolean(state.loadError); });
+  feedback.replaceChildren();
+  if (!state.loadError) return;
+  const message = document.createElement('p');
+  message.textContent = state.loadError;
+  const retry = document.createElement('button');
+  retry.type = 'button';
+  retry.className = 'button';
+  retry.dataset.action = 'refresh';
+  retry.textContent = 'Thử lại';
+  feedback.append(message, retry);
+}
+
+function showError(error) {
+  if (!error.displayedInline) notify(error.message, 'error');
+}
+
+window.addEventListener('resize', () => updateManagerNav());
 
 function draw() {
   if (state.page === 'counts' && state.data) state.draft = readDraft();
   const nav = app.querySelector('[data-manager-nav]');
-  const navScroll = nav?.scrollLeft;
   const focusedTab = nav?.contains(document.activeElement) ? document.activeElement.dataset.id : undefined;
   document.body.classList.toggle('staff', state.data?.user.role === 'staff');
+  document.body.dataset.page = state.data ? state.page : 'login';
   invoiceObserver?.disconnect();
   invoiceUrls.forEach(({ url }) => URL.revokeObjectURL(url));
   invoiceUrls.clear();
@@ -103,9 +118,10 @@ function draw() {
     ? `<section class="loading" role="status"><p>${esc(state.sessionMessage)}</p>
       ${button('Thử lại', 'restore-session')}</section>`
     : state.data ? renderDashboard(state) : renderLogin();
-  updateManagerNav(navScroll, focusedTab);
+  updateManagerNav(focusedTab);
   setupLists(app, listStates);
   observeInvoices();
+  updateFeedback();
   app.removeAttribute('aria-busy');
   if (state.page === 'counts' && state.data) updateCountView();
 }
@@ -128,6 +144,8 @@ async function clearSession() {
   state.token = null;
   state.persistent = state.pendingLogout = false;
   state.sessionMessage = '';
+  state.loadError = '';
+  state.menuOpen = false;
   state.data = null;
   state.page = 'stock';
   state.location = '';
@@ -227,21 +245,40 @@ async function loadHistory(before = null) {
 
 async function refresh() {
   const version = ++readVersion;
-  const params = new URLSearchParams();
-  if (state.location) params.set('location', state.location);
-  if (state.reportWeek) params.set('week', state.reportWeek);
-  const [data, history, report] = await Promise.all([
-    api('snapshot'), state.page === 'history' ? loadHistory() : null,
-    state.page === 'report' ? api('report?' + params) : null,
-  ]);
-  if (version !== readVersion || !state.token) return;
-  const initial = !state.data;
-  state.sessionMessage = '';
-  state.data = data;
-  if (initial) restoreCountPage();
-  if (history) state.history = history;
-  if (report) state.report = report;
-  draw();
+  const refreshButton = app.querySelector('[data-action="refresh"]');
+  if (refreshButton) { refreshButton.disabled = true; refreshButton.textContent = 'Đang làm mới…'; }
+  state.loadError = '';
+  updateFeedback();
+  app.setAttribute('aria-busy', 'true');
+  try {
+    const params = new URLSearchParams();
+    if (state.location) params.set('location', state.location);
+    if (state.reportWeek) params.set('week', state.reportWeek);
+    const [data, history, report] = await Promise.all([
+      api('snapshot'), state.page === 'history' ? loadHistory() : null,
+      state.page === 'report' ? api('report?' + params) : null,
+    ]);
+    if (version !== readVersion || !state.token) return;
+    const initial = !state.data;
+    state.sessionMessage = '';
+    state.data = data;
+    if (initial) restoreCountPage();
+    if (history) state.history = history;
+    if (report) state.report = report;
+    draw();
+  } catch (error) {
+    if (version === readVersion && state.data) {
+      state.loadError = 'Chưa cập nhật được dữ liệu. ' + error.message;
+      updateFeedback();
+      error.displayedInline = true;
+    }
+    throw error;
+  } finally {
+    if (version === readVersion) {
+      app.removeAttribute('aria-busy');
+      if (refreshButton?.isConnected) { refreshButton.disabled = false; refreshButton.textContent = 'Làm mới'; }
+    }
+  }
 }
 
 function getItem(id) {
@@ -423,13 +460,26 @@ function formError(form, message) {
   const error = form.querySelector('.error');
   error.textContent = message;
   error.hidden = !message;
+  if (message) { error.tabIndex = -1; error.focus(); }
+}
+
+function requestCloseForm() {
+  if (busy) return;
+  const confirmation = dialog.querySelector('.discard-confirm');
+  if (dialog.dataset.dirty === 'true' && confirmation) {
+    confirmation.hidden = false;
+    confirmation.querySelector('button')?.focus();
+  } else dialog.close();
 }
 
 function showForm({ title, fields, action, collect, save = pending => api(action, { method: 'POST', ...pending }),
   submit = 'Lưu', success = 'Đã lưu.', onSuccess }) {
+  dialog.dataset.dirty = 'false';
+  dialog.classList.toggle('task-dialog', ['deliveries', 'transfers', 'items'].includes(action));
   dialog.innerHTML = `<h2 id="dialog-title">${esc(title)}</h2><form>
     ${fields}<p class="error" role="alert" hidden></p>
-    <div class="actions">${button('Hủy', 'close')}<button class="button primary" type="submit">${esc(submit)}</button></div>
+    <div class="discard-confirm" role="group" aria-label="Thay đổi chưa lưu" hidden><p>Thay đổi trong biểu mẫu này chưa được lưu. Bạn muốn tiếp tục nhập hay bỏ thay đổi?</p><div class="actions">${button('Tiếp tục nhập', 'keep-editing')}${button('Bỏ thay đổi', 'discard-form')}</div></div>
+    <div class="actions form-actions">${button('Hủy', 'close')}<button class="button primary" type="submit">${esc(submit)}</button></div>
   </form>`;
   const form = dialog.querySelector('form');
   const submitButton = form.querySelector('[type="submit"]');
@@ -445,6 +495,8 @@ function showForm({ title, fields, action, collect, save = pending => api(action
     busy = true;
     const cancel = form.querySelector('[data-action="close"]');
     submitButton.disabled = cancel.disabled = true;
+    submitButton.textContent = 'Đang lưu…';
+    form.setAttribute('aria-busy', 'true');
     formError(form, '');
     try {
       pending ??= { data: await collect(new FormData(form), form), key: newKey() };
@@ -471,6 +523,8 @@ function showForm({ title, fields, action, collect, save = pending => api(action
       }
     } finally {
       busy = false;
+      form.removeAttribute('aria-busy');
+      if (submitButton.textContent === 'Đang lưu…') submitButton.textContent = submit;
       cancel.disabled = false;
       updateSubmit();
     }
@@ -585,6 +639,7 @@ function updateCountView() {
     const count = fields.length;
     const entered = fields.filter(field => field.value.trim()).length;
     progress.textContent = entered + '/' + count + ' đã nhập' + (count ? ' · ' + (count - entered) + ' chưa đếm' : '');
+    fields.forEach(field => field.closest('.count-item').classList.toggle('is-counted', Boolean(field.value.trim())));
   }
 }
 
@@ -952,7 +1007,7 @@ app.addEventListener('submit', async event => {
     state.historyQuery = form.elements.query.value.trim();
     state.history = { entries: [], next: null };
     listStates.delete('history');
-    await refresh().catch(error => notify(error.message));
+    await refresh().catch(showError);
     return;
   }
   if (form.id !== 'login-form') return;
@@ -960,6 +1015,7 @@ app.addEventListener('submit', async event => {
   if (signingIn) return;
   signingIn = true;
   submit.disabled = true;
+  submit.textContent = 'Đang đăng nhập…';
   formError(form, '');
   try {
     const data = Object.fromEntries(new FormData(form));
@@ -988,6 +1044,7 @@ app.addEventListener('submit', async event => {
   } finally {
     signingIn = false;
     submit.disabled = false;
+    submit.textContent = 'Đăng nhập';
   }
 });
 
@@ -995,7 +1052,7 @@ app.addEventListener('change', async event => {
   if (event.target.id === 'staff-account-switch') {
     const id = event.target.value;
     event.target.value = state.staffAccount;
-    if (!busy && id !== state.staffAccount) await switchStaffAccount(id).catch(error => notify(error.message));
+    if (!busy && id !== state.staffAccount) await switchStaffAccount(id).catch(showError);
     return;
   }
   if (event.target.id === 'location-filter') {
@@ -1006,7 +1063,7 @@ app.addEventListener('change', async event => {
       state.history = { entries: [], next: null };
       state.report = null;
       draw();
-      await refresh().catch(error => notify(error.message));
+      await refresh().catch(showError);
     } else draw();
   }
   if (event.target.id === 'low-filter') {
@@ -1024,7 +1081,7 @@ app.addEventListener('change', async event => {
     const day = new Date(event.target.value + 'T00:00:00Z');
     day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
     state.reportWeek = day.toISOString().slice(0, 10);
-    await refresh().catch(error => notify(error.message));
+    await refresh().catch(showError);
   }
 });
 
@@ -1046,7 +1103,13 @@ app.addEventListener('input', event => {
     app.querySelector('[data-count-stale="' + CSS.escape(item) + '"]').hidden = true;
     updateCountView();
   } else return;
-  try { localStorage.setItem(draftKey(), JSON.stringify(state.draft)); } catch { /* The active form still retains the values. */ }
+  const status = app.querySelector('#draft-status');
+  try {
+    localStorage.setItem(draftKey(), JSON.stringify(state.draft));
+    if (status) { status.textContent = 'Đã lưu nháp trên thiết bị này.'; status.classList.remove('error'); }
+  } catch {
+    if (status) { status.textContent = 'Chưa lưu được nháp. Giữ trang mở đến khi gửi xong.'; status.classList.add('error'); }
+  }
   rememberCountGroup();
 });
 
@@ -1111,22 +1174,33 @@ dialog.addEventListener('keydown', event => {
     if (match) chooseOrderItem(match.dataset.id, match);
   }
 });
-dialog.addEventListener('cancel', event => { if (busy) event.preventDefault(); });
+dialog.addEventListener('input', () => { dialog.dataset.dirty = 'true'; });
+dialog.addEventListener('change', () => { dialog.dataset.dirty = 'true'; });
+dialog.addEventListener('cancel', event => { event.preventDefault(); requestCloseForm(); });
 dialog.addEventListener('close', () => {
+  dialog.dataset.dirty = 'false';
+  dialog.classList.remove('task-dialog');
   dialog.querySelectorAll('input[type="password"]').forEach(input => { input.value = ''; });
   if (photoUrl) URL.revokeObjectURL(photoUrl);
   photoUrl = null;
 });
 
 const actions = {
+  'toggle-menu': () => { state.menuOpen = !state.menuOpen; updateManagerNav(); },
+  'keep-editing': () => { dialog.querySelector('.discard-confirm').hidden = true; dialog.querySelector('input:not([type="hidden"]):not(:disabled), select, textarea')?.focus(); },
+  'discard-form': () => dialog.close(),
   'switch-staff': switchStaffAccount,
   'restore-session': restoreNativeSession,
   'staff-password': staffPasswordForm,
   page: async id => {
     state.page = id;
+    state.menuOpen = false;
+    state.loadError = '';
     if (id === 'counts' && !state.category) state.category = restoreCountGroup(countLocation());
     if (id === 'history') state.history = { entries: [], next: null };
     draw();
+    app.querySelector('.heading h1')?.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, behavior: 'instant' });
     if (id === 'history' || id === 'report') await refresh();
   },
   refresh,
@@ -1179,7 +1253,7 @@ const actions = {
   },
   'transfer-receipt': transferReceiptForm,
   photo: showPhoto,
-  close: () => dialog.close(),
+  close: requestCloseForm,
   'add-line': () => dialog.querySelector('#order-lines').insertAdjacentHTML('beforeend', orderLine(true)),
   'choose-order-item': chooseOrderItem,
   'toggle-new-item': toggleNewOrderItem,
@@ -1191,10 +1265,37 @@ document.addEventListener('click', async event => {
   if (!target || busy) return;
   const action = actions[target.dataset.action];
   if (!action) return;
+  if (dialog.contains(target) && ['add-line', 'remove-line', 'add-transfer-items', 'remove-transfer-item', 'toggle-new-item'].includes(target.dataset.action)) dialog.dataset.dirty = 'true';
   try {
     await action(target.dataset.id, target);
   } catch (error) {
-    notify(error.message);
+    showError(error);
+  }
+});
+
+// Keep the focused field in view without placing navigation above the keyboard.
+const viewport = window.visualViewport;
+let restingViewportHeight = viewport?.height ?? window.innerHeight;
+viewport?.addEventListener('resize', () => {
+  const editing = document.activeElement?.matches('input, select, textarea');
+  if (!editing) restingViewportHeight = viewport.height;
+  const keyboardOpen = Boolean(editing && restingViewportHeight - viewport.height > 150);
+  document.body.classList.toggle('keyboard-open', keyboardOpen);
+  if (keyboardOpen) document.activeElement.scrollIntoView({ block: 'nearest' });
+});
+document.addEventListener('focusout', () => { if (!document.activeElement?.matches('input, select, textarea')) document.body.classList.remove('keyboard-open'); });
+window.addEventListener('orientationchange', () => { restingViewportHeight = window.innerHeight; });
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && state.menuOpen && !dialog.open) {
+    state.menuOpen = false;
+    updateManagerNav();
+    app.querySelector('.menu-toggle')?.focus();
+  }
+});
+window.addEventListener('beforeunload', event => {
+  if (dialog.open && dialog.dataset.dirty === 'true') {
+    event.preventDefault();
+    event.returnValue = '';
   }
 });
 
@@ -1205,5 +1306,5 @@ if (native) {
   window.addEventListener('online', resume);
   document.addEventListener('visibilitychange', resume);
   void restoreNativeSession();
-} else if (state.token) refresh().catch(error => { draw(); notify(error.message); });
+} else if (state.token) refresh().catch(error => { draw(); showError(error); });
 else draw();
