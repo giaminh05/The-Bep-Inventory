@@ -470,21 +470,45 @@ export function readPhoto(db, user, id) {
   return receipt;
 }
 
-export function readHistory(db, user, location, before, query = '') {
+export function readHistory(db, user, location, before, query = '', filters = {}) {
   managerOnly(user);
   if (location) allow(user, location);
   const scope = location || (user.role === 'manager' ? null : user.location_id);
-  const cursor = before === null ? Number.MAX_SAFE_INTEGER : Number(before);
-  if (!Number.isSafeInteger(cursor) || cursor < 1) throw new HttpError(400, 'Mốc lịch sử không hợp lệ.');
+  const ascending = filters.order === 'oldest';
+  if (filters.order && !['newest', 'oldest'].includes(filters.order)) throw new HttpError(400, 'Thứ tự lịch sử không hợp lệ.');
+  const cursor = before === null ? (ascending ? 0 : Number.MAX_SAFE_INTEGER) : Number(before);
+  if (!Number.isSafeInteger(cursor) || cursor < 0 || (!ascending && cursor === 0)) throw new HttpError(400, 'Mốc lịch sử không hợp lệ.');
+  const from = filters.from || '';
+  const to = filters.to || '';
+  for (const date of [from, to].filter(Boolean)) {
+    const parsed = new Date(date + 'T00:00:00Z');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(+parsed) || parsed.toISOString().slice(0, 10) !== date) {
+      throw new HttpError(400, 'Ngày lọc lịch sử không hợp lệ.');
+    }
+  }
+  if (from && to && from > to) throw new HttpError(400, 'Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.');
+  const type = filters.type || '';
+  if (type && !['count', 'sheet_count', 'supplier_receipt', 'transfer_out', 'transfer_in', 'counts'].includes(type)) {
+    throw new HttpError(400, 'Loại thao tác không hợp lệ.');
+  }
+  const person = String(filters.person || '').slice(0, 150);
+  db.function('history_day', { deterministic: true }, timestamp => atlantaDate.format(new Date(timestamp)));
   const rows = db.prepare(`
-    SELECT movements.*, users.name AS actor_name
+    SELECT movements.*, users.name AS actor_name, count_sheets.performed_by
     FROM movements JOIN users ON users.id = movements.actor JOIN items ON items.id = movements.item_id
     JOIN locations ON locations.id = movements.location_id
-    WHERE movements.id < ? AND (? IS NULL OR movements.location_id = ?)
+    LEFT JOIN count_lines ON count_lines.movement_id = movements.id
+    LEFT JOIN count_sheets ON count_sheets.id = count_lines.sheet_id
+    WHERE movements.id ${ascending ? '>' : '<'} ? AND (? IS NULL OR movements.location_id = ?)
       AND instr(search_text(items.name || ' ' || items.id || ' ' || COALESCE(items.sku, '') || ' ' ||
-        locations.name || ' ' || users.name || ' ' || COALESCE(movements.note, '')), search_text(?)) > 0
-    ORDER BY movements.id DESC LIMIT 51
-  `).all(cursor, scope, scope, query.slice(0, 150));
+        locations.name || ' ' || users.name || ' ' || users.id || ' ' || COALESCE(count_sheets.performed_by, '') || ' ' ||
+        COALESCE(movements.note, '')), search_text(?)) > 0
+      AND instr(search_text(users.name || ' ' || users.id || ' ' || COALESCE(count_sheets.performed_by, '')), search_text(?)) > 0
+      AND (? = '' OR history_day(movements.created_at) >= ?)
+      AND (? = '' OR history_day(movements.created_at) <= ?)
+      AND (? = '' OR movements.type = ? OR (? = 'counts' AND movements.type IN ('count', 'sheet_count')))
+    ORDER BY movements.id ${ascending ? 'ASC' : 'DESC'} LIMIT 51
+  `).all(cursor, scope, scope, query.slice(0, 150), person, from, from, to, to, type, type, type);
   const lookup = db.prepare('SELECT quantity, count_movement_id FROM counted_receipts WHERE movement_id = ?');
   const entries = rows.slice(0, 50).map(row => {
     const counted = lookup.get(row.id);

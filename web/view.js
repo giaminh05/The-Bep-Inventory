@@ -76,7 +76,7 @@ export function renderDashboard(state) {
     counts: () => countView(state, stock, items, locations),
     deliveries: () => deliveriesView(deliveries, items, locations, manager),
     transfers: () => transfersView(transfers, items, locations, data.user),
-    history: () => historyView(state.history, items, locations, state.historyQuery),
+    history: () => historyView(state.history, items, locations, state.historyQuery, state.historyFilters, location),
     report: () => reportView(state, items, locations),
     accounts: () => accountsView(data.accounts ?? [], locations),
   };
@@ -286,15 +286,26 @@ function transfersView(transfers, items, locations, user) {
   }).join('')}</div>`;
 }
 
-function historyView(history, items, locations, query) {
+function historyView(history, items, locations, query, filters = {}, location = '') {
   const search = `<form id="history-search" class="list-controls">
-    <label>Tìm trong nhật ký<input type="search" name="query" maxlength="150" value="${esc(query)}"></label>
-    <button class="button" type="submit">Tìm</button></form>`;
-  if (!history.entries.length) return `<div class="panel">${search}${empty(query ? 'Không có kết quả.' : 'Chưa có thay đổi tồn kho.')}</div>`;
+    <label>Tìm trong nhật ký<input type="search" name="query" maxlength="150" placeholder="Mặt hàng, người kiểm kê, ghi chú" value="${esc(query)}"></label>
+    <label>Người kiểm kê / Tài khoản<input type="search" name="person" maxlength="150" value="${esc(filters.person)}"></label>
+    <label>Địa điểm<select name="location">${option('', 'Tất cả địa điểm', location)}
+      ${Object.entries(locations).map(([id, name]) => option(id, name, location)).join('')}</select></label>
+    <label>Từ ngày (Atlanta)<input type="date" name="from" value="${esc(filters.from)}"></label>
+    <label>Đến ngày (Atlanta)<input type="date" name="to" value="${esc(filters.to)}"></label>
+    <label>Thao tác<select name="type">${option('', 'Tất cả thao tác', filters.type)}
+      ${option('counts', 'Tất cả kiểm kê', filters.type)}
+      ${Object.entries(eventNames).map(([id, name]) => option(id, name, filters.type)).join('')}</select></label>
+    <label>Thứ tự<select name="order">${option('newest', 'Mới nhất trước', filters.order || 'newest')}
+      ${option('oldest', 'Cũ nhất trước', filters.order)}</select></label>
+    <button class="button" type="submit">Lọc nhật ký</button></form>`;
+  if (!history.entries.length) return `<div class="panel">${search}${empty('Không có giao dịch phù hợp.')}</div>`;
   const rows = history.entries.map(row => {
     const item = items[row.item_id];
     const unit = esc(unitLabel(item.base_unit));
-    return `<tr data-list-row data-search="${esc([itemSearch(item), row.actor_name, locations[row.location_id], eventNames[row.type], row.note].join(' '))}"><td>${date(row.created_at)}<small>${esc(row.actor_name)}</small></td>
+    return `<tr data-list-row data-search="${esc([itemSearch(item), row.actor_name, row.performed_by, locations[row.location_id], eventNames[row.type], row.note].join(' '))}"><td>${date(row.created_at)}<small>Tài khoản · ${esc(row.actor_name)}</small>
+      ${row.performed_by ? `<small>Người kiểm kê · ${esc(row.performed_by)}</small>` : ''}</td>
       <td data-label="Thao tác">${eventNames[row.type]}</td><td data-label="Mặt hàng">${esc(item.name)}<small>${esc(locations[row.location_id])}</small></td>
       <td data-label="Thay đổi">${row.delta === null ? '—' : signed(row.delta) + ' ' + unit}</td>
       <td data-label="Số dư">${row.balance === null ? 'Chưa biết' : number(row.balance) + ' ' + unit}</td><td data-label="Ghi chú">
