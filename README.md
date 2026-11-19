@@ -57,6 +57,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-android-local.
 
 Lệnh tạo APK debug, nối cổng backend qua USB/ADB và mở app trên thiết bị. App debug tải giao diện trực tiếp từ backend trên máy tính, nên sửa giao diện xong có thể mở lại app để xem thay đổi. Truyền `-BuildOnly` để chỉ tạo APK hoặc `-Serial <adb-device>` khi đang kết nối nhiều thiết bị.
 
+Để mở cả web trên máy tính và app Android cùng dùng backend dữ liệu mẫu, nhấp đúp `Mo-The-Bep-Web-Android.cmd`. Có thể chạy tương đương trong PowerShell:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run-web-android-local.ps1
+```
+
 Launcher dùng chế độ đồ họa phần mềm cho `Bep_API_36` để chạy ổn định trên máy Windows đã thiết lập. Lần khởi động máy ảo có thể mất vài phút. Nếu máy ảo đang chạy, launcher dùng thiết bị đang kết nối.
 
 ### Bản native dùng backend HTTPS
