@@ -129,7 +129,8 @@ export function inventoryServer({ db, allowedOrigins = ['capacitor://localhost',
       }
       if (req.method === 'GET' && path === '/api/history') {
         return json(res, 200, readHistory(db, user, url.searchParams.get('location'), url.searchParams.get('before'),
-          url.searchParams.get('q') ?? ''));
+          url.searchParams.get('q') ?? '', Object.fromEntries(
+            ['person', 'from', 'to', 'type', 'order'].map(name => [name, url.searchParams.get(name) ?? '']))));
       }
       if (req.method === 'GET' && /^\/api\/photos\/[\w-]+$/.test(path)) {
         const photo = readPhoto(db, user, path.split('/').at(-1));

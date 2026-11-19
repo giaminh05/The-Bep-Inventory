@@ -13,7 +13,7 @@ if (native) sessionStorage.removeItem(storageKey);
 sessionStorage.removeItem('bep-manager-session');
 sessionStorage.removeItem('bep-staff-session');
 const state = { token, data: null, page: 'stock', location: '', lowOnly: false,
-  history: { entries: [], next: null }, historyQuery: '', category: '', draft: null, report: null, reportWeek: '',
+  history: { entries: [], next: null }, historyQuery: '', historyFilters: {}, category: '', draft: null, report: null, reportWeek: '',
   sessionMessage: '', pendingLogout: false, persistent: false, loadError: '', menuOpen: false };
 let restoring = false;
 let signingIn = false;
@@ -152,6 +152,7 @@ async function clearSession() {
   state.lowOnly = false;
   state.history = { entries: [], next: null };
   state.category = state.historyQuery = state.reportWeek = '';
+  state.historyFilters = {};
   state.draft = state.report = null;
   listStates.clear();
   if (dialog.open) dialog.close();
@@ -240,6 +241,9 @@ async function loadHistory(before = null) {
   if (state.location) params.set('location', state.location);
   if (before) params.set('before', before);
   if (state.historyQuery) params.set('q', state.historyQuery);
+  for (const [name, value] of Object.entries(state.historyFilters)) {
+    if (value) params.set(name, value);
+  }
   return api('history?' + params);
 }
 
@@ -289,6 +293,7 @@ async function switchStaffAccount(id) {
   const accounts = state.switchAccounts ?? state.data?.accounts;
   if (!accounts || (id && !accounts.some(account => account.id === id))) return;
   const token = state.token;
+  const page = state.staffAccount && ['counts', 'deliveries', 'transfers'].includes(state.page) ? state.page : 'counts';
   busy = true;
   try {
     const data = await api('snapshot', { staffAccount: id });
@@ -297,11 +302,12 @@ async function switchStaffAccount(id) {
     state.switchAccounts = id ? accounts : null;
     state.staffAccount = id;
     state.data = data;
-    state.page = id ? 'counts' : 'accounts';
+    state.page = id ? page : 'accounts';
     state.location = state.category = state.historyQuery = state.reportWeek = '';
     state.lowOnly = false;
     state.draft = state.report = null;
     state.history = { entries: [], next: null };
+    state.historyFilters = {};
     listStates.clear();
     if (id) state.category = restoreCountGroup(data.user.location_id);
     draw();
@@ -579,8 +585,13 @@ function readDraft(place = countLocation(), category = state.category) {
   const draft = readStored(draftKey(place, category));
   const values = draft?.values;
   return { values: values && typeof values === 'object' && !Array.isArray(values) ? values : {},
-    performedBy: typeof draft?.performedBy === 'string' ? draft.performedBy : '',
+    performedBy: readCountName(place) ?? (typeof draft?.performedBy === 'string' ? draft.performedBy : ''),
     note: typeof draft?.note === 'string' ? draft.note : '' };
+}
+
+function readCountName(place = countLocation()) {
+  const saved = readStored(JSON.stringify([...draftScope(), place, 'count-performed']));
+  return typeof saved === 'string' ? saved : null;
 }
 
 function countDrafts(place, activeDraft) {
@@ -692,7 +703,7 @@ function submitCount() {
       return { item: item.id, quantity: entry.quantity, unit, revision: entry.revision };
     });
     return { draft, key: newKey(), data: { location: place, category, lines,
-      performedBy: draft.performedBy.trim() || defaultName, note: draft.note.trim() } };
+      performedBy: (readCountName(place) ?? draft.performedBy).trim() || defaultName, note: draft.note.trim() } };
   });
   const queue = [...requests];
   showForm({
@@ -1005,6 +1016,8 @@ app.addEventListener('submit', async event => {
   const form = event.target;
   if (form.id === 'history-search') {
     state.historyQuery = form.elements.query.value.trim();
+    state.location = form.elements.location.value;
+    state.historyFilters = Object.fromEntries(['person', 'from', 'to', 'type', 'order'].map(name => [name, form.elements[name].value.trim()]));
     state.history = { entries: [], next: null };
     listStates.delete('history');
     await refresh().catch(showError);
@@ -1072,6 +1085,11 @@ app.addEventListener('change', async event => {
     document.querySelector('#low-filter')?.focus();
   }
   if (event.target.id === 'count-category') {
+    if (state.draft?.performedBy && readCountName() === null) {
+      try {
+        localStorage.setItem(JSON.stringify([...draftScope(), countLocation(), 'count-performed']), JSON.stringify(state.draft.performedBy));
+      } catch { /* The existing category draft retains its name. */ }
+    }
     state.category = event.target.value;
     rememberCountGroup();
     draw();
@@ -1088,7 +1106,12 @@ app.addEventListener('change', async event => {
 app.addEventListener('input', event => {
   const field = event.target;
   if (state.page !== 'counts' || !state.draft) return;
-  if (field.id === 'count-performed') state.draft.performedBy = field.value;
+  if (field.id === 'count-performed') {
+    state.draft.performedBy = field.value;
+    try {
+      localStorage.setItem(JSON.stringify([...draftScope(), countLocation(), 'count-performed']), JSON.stringify(field.value));
+    } catch { /* The active draft still retains the name. */ }
+  }
   else if (field.id === 'count-note') state.draft.note = field.value;
   else if (field.matches('[data-count-unit]')) {
     const item = field.closest('.count-item').querySelector('[data-count-item]').dataset.countItem;
@@ -1208,8 +1231,10 @@ const actions = {
     const location = state.location;
     const cursor = state.history.next;
     const query = state.historyQuery;
+    const filters = JSON.stringify(state.historyFilters);
     const next = await loadHistory(cursor);
-    if (state.page !== 'history' || state.location !== location || state.history.next !== cursor || state.historyQuery !== query) return;
+    if (state.page !== 'history' || state.location !== location || state.history.next !== cursor || state.historyQuery !== query ||
+      JSON.stringify(state.historyFilters) !== filters) return;
     state.history = { entries: [...state.history.entries, ...next.entries], next: next.next };
     draw();
   },
