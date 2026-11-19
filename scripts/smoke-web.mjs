@@ -36,43 +36,29 @@ try {
     const managerPhone = await browser.newPage({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
     await login(managerPhone, 'manager');
     const nav = managerPhone.getByRole('navigation', { name: 'Chức năng kho' });
-    const active = nav.locator('[aria-current="page"]');
-    const assertActiveTabVisible = async () => assert.deepEqual(await active.evaluate(tab => {
-      const scroller = tab.closest('nav');
-      const bounds = scroller.getBoundingClientRect();
-      const button = tab.getBoundingClientRect();
-      return { tabVisible: button.left >= bounds.left - 1 && button.right <= bounds.right + 1,
-        pageFits: document.documentElement.scrollWidth === innerWidth };
-    }), { tabVisible: true, pageFits: true });
-    await managerPhone.getByText('Cuộn ngang để xem thêm tab').waitFor();
-    const touch = await managerPhone.context().newCDPSession(managerPhone);
-    const { x, y, width: navWidth, height } = await nav.boundingBox();
-    const point = offset => ({ x: Math.round(x + navWidth * offset), y: Math.round(y + height / 2) });
-    await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point(.85)] });
-    for (const offset of [.7, .55, .4, .25]) {
-      await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [point(offset)] });
-    }
-    await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    await managerPhone.waitForFunction(() => document.querySelector('[data-manager-nav]').scrollLeft > 0);
-    await touch.detach();
-
+    const menu = managerPhone.getByRole('button', { name: 'Chức năng', exact: true });
+    const assertPageFits = async () => assert.equal(await managerPhone.evaluate(() => document.documentElement.scrollWidth === innerWidth), true);
     for (const title of ['Phiếu kiểm kê', 'Đơn giao', 'Chuyển kho', 'Nhật ký', 'Báo cáo tuần', 'Tồn kho']) {
+      await menu.tap();
+      assert.equal(await menu.getAttribute('aria-expanded'), 'true');
       await nav.getByRole('button', { name: title, exact: true }).tap();
       await managerPhone.getByRole('heading', { name: title, exact: true }).waitFor();
-      await assertActiveTabVisible();
+      assert.equal(await menu.getAttribute('aria-expanded'), 'false');
+      await assertPageFits();
     }
+    await menu.tap();
     await nav.getByRole('button', { name: 'Báo cáo tuần', exact: true }).focus();
     await managerPhone.keyboard.press('Tab');
     await managerPhone.keyboard.press('Enter');
     await managerPhone.getByRole('heading', { name: 'Tài khoản', exact: true }).waitFor();
     await managerPhone.waitForFunction(() =>
-      document.activeElement.matches('[data-manager-nav] [data-id="accounts"][aria-current="page"]'));
-    await assertActiveTabVisible();
-    const renderedNav = await nav.elementHandle();
+      document.activeElement.matches('.heading h1'));
+    await assertPageFits();
     await managerPhone.getByRole('button', { name: 'Làm mới' }).tap();
-    await renderedNav.waitForElementState('hidden');
-    await assertActiveTabVisible();
+    await managerPhone.waitForFunction(() => !document.querySelector('#app').hasAttribute('aria-busy'));
+    await assertPageFits();
 
+    await menu.tap();
     await nav.getByRole('button', { name: 'Phiếu kiểm kê', exact: true }).tap();
     const place = managerPhone.getByRole('combobox', { name: 'Lọc địa điểm' });
     await place.selectOption('duluth');
@@ -98,7 +84,7 @@ try {
   assert.equal(await locationFilter.locator('option').count(), 6);
   assert.equal(await desktop.locator('.stock-table tbody tr').count(), 3);
   assert.equal(await desktop.locator('[data-list-pages]:visible').count(), 0);
-  assert.equal(await desktop.locator('.nav-scroll-hint').isVisible(), false);
+  assert.equal(await desktop.locator('.menu-toggle').isVisible(), false);
   await desktop.getByRole('row').filter({ hasText: 'Trà xanh' }).getByText('108', { exact: true }).waitFor();
   const tapiocaTotal = desktop.getByRole('row').filter({ hasText: 'Trân châu' });
   await tapiocaTotal.getByText('65', { exact: true }).waitFor();
@@ -278,7 +264,7 @@ try {
   assert.equal(await desktop.locator('.stock-table tbody tr:visible').count(), 1);
   assert.equal(await desktop.locator('[data-list-pages]:visible').count(), 0);
   await desktop.getByLabel('Tìm mặt hàng').fill('khong co mat hang nay');
-  await desktop.getByText('Không có kết quả', { exact: true }).waitFor();
+  await desktop.getByText('Không có kết quả. Thử tên khác hoặc xóa nội dung tìm kiếm.', { exact: true }).waitFor();
   assert.equal(await desktop.locator('[data-list-pages]:visible').count(), 0);
   assert.equal(await desktop.locator('.stock-table tbody tr:visible').count(), 0);
 

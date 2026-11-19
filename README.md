@@ -137,6 +137,10 @@ node --test
 
 Suite API dùng cơ sở dữ liệu bộ nhớ, không thay đổi dữ liệu demo. Bài kiểm tra Chrome dùng `scripts/smoke-web.mjs`, cần Playwright và Chromium. Có thể chỉ định đường dẫn qua `BEP_PLAYWRIGHT` và `BEP_CHROME`.
 
+Kiểm tra giao diện bằng `node scripts/verify-ui.mjs`. Bài kiểm tra dùng dữ liệu mẫu trong bộ nhớ, kiểm tra giao diện sáng/tối, màn hình 320/390 px, chữ lớn, nháp kiểm kê, xác nhận bỏ thay đổi và thử lại khi tải lỗi. Ảnh chụp được lưu trong thư mục tạm của hệ điều hành; đường dẫn được in sau khi chạy. Trên Windows, nếu chưa cài Chromium của Playwright, đặt `$env:BEP_CHROME = 'C:\Program Files\Google\Chrome\Application\chrome.exe'` trước khi chạy.
+
+Giao diện tự đổi sáng/tối theo thiết bị. Nhân viên dùng ba tab cố định ở cuối màn hình; quản lý trên điện thoại mở **Chức năng** để chọn trang. Nháp kiểm kê vẫn được giữ trên thiết bị; nút **Kiểm tra và gửi** nằm cố định khi nhập trên điện thoại. Biểu mẫu đã sửa sẽ hỏi trước khi bỏ thay đổi. Các thay đổi trong `web/` có hiệu lực khi tải lại trình duyệt hoặc app debug dùng backend; bản native đóng gói cần chạy lại `build:mobile` và sao chép tài nguyên Capacitor như hướng dẫn ở trên.
+
 ## Cấu trúc mã nguồn
 
 - `server/db.mjs` tạo lược đồ, tài khoản và dữ liệu mẫu. SQLite lưu ảnh, chứng từ, nhật ký và số dư.
