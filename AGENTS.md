@@ -18,7 +18,7 @@
 ## Current migration authorization
 
 - On November 20, 2026, the user approved option A and M1 (G1/G2): incremental migration retaining the API/SQLite backend and legacy clients, starting with behavioral regression tests, parity evidence, and disposable-data backup/restore rehearsal.
-- M0 documentation is complete; M1 is in progress. M1 permits necessary regression tests, disposable fixtures, backup/restore tooling, and related documentation. It does not authorize Next.js/Expo UI implementation, dependency installation/upgrades, application behavior changes, production schema/data changes, native project changes, or deployment configuration changes.
+- M0 documentation and M1 baseline/recovery checks are complete. M1 authorized regression tests, disposable fixtures, backup/restore tooling, and related documentation. It does not authorize Next.js/Expo UI implementation, dependency installation/upgrades, application behavior changes, production schema/data changes, native project changes, or deployment configuration changes. Present the concrete M2 scope for approval before proceeding.
 - Do not scaffold Next.js/Expo, run `cap sync` or `expo prebuild`, or deploy without the applicable later approval. M2+ tasks retain their scope/dependency gates; choosing option A does not authorize every planned task.
 - Reading status and testing disposable data are permitted; do not test writes against the operational database.
 - Documentation or M1 approval does not authorize production deployment, real-data changes, or business policy changes.
@@ -60,7 +60,7 @@
 ## Testing and documentation
 
 - Run appropriate checks before claiming completion; report failures and unrun checks. API suite: `npm.cmd test` on Windows or `node --test`.
-- Browser suites: `node scripts/smoke-web.mjs`, `node scripts/verify-ui.mjs`. Use `:memory:` or disposable fixtures, never the operational database; keep QA images in temporary storage.
+- Browser suites: `node scripts/smoke-web.mjs`, `node scripts/verify-ui.mjs`, `node scripts/verify-parity.mjs`. Use `:memory:` or disposable fixtures, never the operational database; keep QA images in temporary storage. Backup/schema/recovery rehearsal: `node --test test/db-compatibility.test.mjs`; operational backup or restore execution still requires separate approval.
 - Regression coverage must address counts, unit conversion, stale revisions, concurrent writes, idempotency, authorization, partial receipts/transfers, counted receipts, history/Atlanta/DST, reports, and network failures.
 - New shared-logic unit tests require parity fixtures against the old implementation; add DB/API integration tests and native tests for secure storage, force-stop/reboot/update/logout.
 - Distinguish new checks from historical evidence, in-memory tests from restart persistence, browser mocks from native execution, and simulators from physical devices.

@@ -133,7 +133,7 @@ Preserving app ID, signing key/team, backend origin, and namespace is necessary.
 | Physical Android/iOS lifecycle, signed update |Not run|Historical mocks/emulators are insufficient|
 | Reimport, file DB restart, backup restore, load |Not run|Operational data untouched|
 
-Concurrency ad hoc and MCP checks were not saved as regressions because M0 allowed documentation writes only. M1 was subsequently approved on November 20 to capture them; current execution evidence belongs in the M1 tracker. UI images are temporary artifacts, not committed.
+Concurrency ad hoc and MCP checks were not saved as regressions during M0 because it allowed documentation writes only. M1 was subsequently approved and completed on November 20: six retained concurrency tests, three browser parity scenarios, six file-backed backup/schema/recovery tests, and a34/34 full suite. See [test matrix](TEST_MATRIX.md), [feature parity](FEATURE_PARITY.md), [backup runbook](BACKUP_RESTORE.md), and the separate M1 evidence in `PROJECT_CONTEXT.md`. The M0 table above remains historical. No inventory behavior, operational database, native project, dependency or infrastructure changed. UI images are temporary artifacts, not committed.
 
 ## 8. Checkpoint, Git scope, and audit limitations
 
