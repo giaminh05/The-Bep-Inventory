@@ -3,12 +3,22 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "packageManager": "pnpm@10.34.9",
   "engines": {
     "node": ">=24"
   },
   "scripts": {
     "start": "node server/http.mjs",
-    "test": "node --test",
+    "test": "node --test test/*.test.mjs",
+    "test:shared": "tsx --test packages/*/test/*.test.ts",
+    "test:web-config": "tsx --test apps/web/test/*.test.ts",
+    "test:web-foundation": "node scripts/verify-next-foundation.mjs",
+    "typecheck": "tsc -p packages/contracts/tsconfig.json && tsc -p packages/api-client/tsconfig.json && tsc -p packages/domain/tsconfig.json && npm run web:typecheck",
+    "web:dev": "npx --yes pnpm@10.34.9 --filter @bep/web dev",
+    "web:build": "npx --yes pnpm@10.34.9 --filter @bep/web build",
+    "web:start": "npx --yes pnpm@10.34.9 --filter @bep/web start",
+    "web:typecheck": "tsc --noEmit -p apps/web/tsconfig.json",
+    "web:lint": "npx --yes pnpm@10.34.9 --filter @bep/web lint",
     "build:mobile": "node scripts/build-mobile.mjs"
   },
   "dependencies": {
@@ -19,6 +29,9 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.0.0",
-    "playwright": "^1.65.0"
+    "playwright": "^1.65.0",
+    "typescript": "5.9.3",
+    "tsx": "4.23.15",
+    "@types/node": "24.10.1"
   }
 }

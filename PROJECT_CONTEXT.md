@@ -6,9 +6,9 @@ Updated November 20, 2026, using the user communication timezone `Asia/Bangkok`.
 
 The project has manager/staff Web interfaces, Android/iOS Capacitor clients, a Node.js backend, and SQLite. The user requested an audit and a migration design for modern interfaces across all three platforms while preserving all business behavior and data.
 
-**On November 20, 2026, the user approved architecture option A and M1 (G1/G2).** M0 audit/documentation and **M1 baseline/recovery checks are complete**. No feature has been migrated. Option A means incremental Next.js Web migration, retaining the API/SQLite backend and operational Capacitor clients, with React Native/Expo only after native compatibility gates. Architecture direction approval is not blanket approval to execute M2+.
+**On November 20, 2026, the user approved architecture option A and M1 (G1/G2), then approved M2 after M1 completion.** M0, M1 and the approved M2 foundation (S01/S02/W01) are complete: shared TypeScript contracts/API adapter, parity-tested pure helpers and an additive Next.js Web preview. No operational inventory workflow or authentication has been migrated. Option A retains the API/SQLite backend and operational Capacitor clients; React Native/Expo remains behind native compatibility gates.
 
-M1 authorizes regression tests, disposable fixtures, backup/restore rehearsal tooling, and related documentation. Next.js/Expo UI code, dependency changes, application behavior changes, production schema/data changes, native project changes, deployment configuration, and deployment remain outside current approval. Never write to the operational DB for tests.
+M2 authorizes the scoped pnpm workspace/dependency setup, shared packages and read-only Web shells beside legacy. W02 authentication/persistence/legacy-origin draft handover, M3 inventory screens, native changes, production data/schema changes and deployment remain outside this slice. Preview roles must not masquerade as authenticated accounts or show fabricated operational data. Never write to the operational DB for tests.
 
 The user's language correction on November 20 is permanent: **English for repository/Git/GitHub work; Vietnamese for chat and user-facing reports.** Product UI remains Vietnamese.
 
@@ -19,6 +19,7 @@ Related documents:
 - [Architecture, milestones, approval gates, and rollback](docs/MIGRATION_PLAN.md).
 - [Completed history regression plan](docs/superpowers/plans/2026-11-20-history-regression-tests.md).
 - [Feature parity and canonical fixtures](docs/FEATURE_PARITY.md), [test matrix](docs/TEST_MATRIX.md), and [backup/restore runbook](docs/BACKUP_RESTORE.md).
+- [M2 Web/workspace runbook and evidence](docs/WEB_FOUNDATION.md).
 
 ## 2. Operational overview and architecture
 
@@ -28,14 +29,14 @@ The UI is Vietnamese. Business dates/reports use `America/New_York` (Atlanta), n
 
 | Layer | Current state |
 | --- | --- |
-| Web | Plain JavaScript ES modules, HTML/CSS, DOM rendering; shared source by effective role |
+| Web | Operational `web/`: plain JavaScript/HTML/CSS by effective role. Parallel `apps/web/`: Next16.4.6/React19.3.1/TypeScript5.9.3/Tailwind4.3.5 read-only preview |
 | Backend | Node.js >=24, ESM, built-in HTTP server; serves both `web/` and `/api/` |
 | Database | Synchronous `node:sqlite`, SQLite WAL, foreign keys, busy timeout; stock/documents/ledger/photo BLOBs in one DB |
 | Android/iOS | Capacitor8; installed 8.6.0; secure-storage pinned 8.0.1 |
 | Android | minSdk24, compile/target36, Gradle8.14.3, AGP8.13.0; local JDK21; version1.0/code1 |
 | iOS | Xcode+SPM; app deployment target15.4, version1.0/build1; SPM exact Capacitor8.6.0 |
 | QA | Node test runner, Playwright1.65.0, Playwright MCP |
-| Dependency tracking | `package.json` version0.1.0, `pnpm-lock.yaml`; no React/Next/RN/Expo yet |
+| Dependency tracking | `package.json` version0.1.0, lockfile9, pinned pnpm10.34.9 workspace; shared packages and Next preview added; no RN/Expo yet |
 
 Browser requests normally use a relative API origin. Standard mobile builds copy `web/` into `dist/`, write the HTTPS backend origin into generated `config.js`, then copy assets into native projects. Local Android debug can load the backend page directly through ADB reverse instead of the packaged bundle.
 
@@ -140,7 +141,7 @@ Audit F01–F18 includes workflow-specific evidence labels. Summary:
 | Persistence/backup/restore/HA |M1 disposable file tests verify WAL backup, restore/reopen, abrupt-exit recovery and supported legacy schema; operational backup/HA/load remain unverified|
 | Import/export/approval |One-time Sheets snapshot importer exists; not rerun; live sync/export/approval absent|
 | Native packaging |Shells exist; four common web-file hashes match current bundles; installed APK/IPA/signing/physical behavior unconfirmed|
-| Migration stack |Next.js/TypeScript/Tailwind/shadcn and RN/Expo unimplemented; option A selected but UI implementation gated|
+| Migration stack |Next/TypeScript/Tailwind foundation and shared contracts/client/domain added; small shadcn-compatible UI primitives, no component-library runtime. W02 auth and M3 inventory screens pending; RN/Expo unimplemented|
 
 ## 6. Test evidence and historical progress
 
@@ -182,6 +183,20 @@ M0 evidence above is historical. Fresh M1 execution evidence is recorded separat
 - [FEATURE_PARITY.md](docs/FEATURE_PARITY.md), [TEST_MATRIX.md](docs/TEST_MATRIX.md) and [BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) retain the oracles, commands, remaining platform gates and operational limitations.
 - Source baseline for M1: merged documentation PR#9 at `a04d175`; work branch `Minh/migration-m1-baseline`. Existing `server/`, `web/`, native projects, package files and configuration remain unchanged. The pre-existing 297 staged skill assets were excluded.
 - No Next.js/Expo client, native bridge or live deployment was implemented. Physical-device signed updates, multi-process/load and actual power-loss testing remain pending. Next step: obtain approval of the concrete M2 contracts/Web-foundation scope.
+
+### 6.4 M2 foundation evidence, November 20, 2026
+
+- Existing `server/`, operational `web/`, native projects and business rules are unchanged. The additive pnpm workspace includes `apps/web` and `packages/contracts`, `packages/api-client`, `packages/domain`.
+- Exact new versions: Next16.4.6, React19.3.1, TS5.9.3, Tailwind4.3.5, Zod4.6.7; pnpm10.34.9 preserves lockfile9. Capacitor core/android/ios/CLI8.6.0, secure-storage8.0.1 and Playwright1.65.0 resolutions were checked unchanged; `cap --version` remains8.6.0. No native build/sync was run.
+- Legacy suite34/34, shared contract/client/domain tests14/14 and origin/config-isolation tests4/4 passed. Shared HTTP tests use memory DB and verify real snapshot/history/report/photo/transfer wire output, manager/staff/delegation permissions,401/403/409 and same-key writes. Quantity/date/usage helpers are checked against literal fixtures and the original backend; server logic was not replaced.
+- Typecheck for all shared packages/Web, Web ESLint and optimized production build passed. Existing smoke/parity/UI suites passed after workspace installation.
+- Production browser harness builds unconfigured and explicit disposable-backend variants. Routes `/`, `/preview/manager`, `/preview/staff` pass320/390/1440px, navigation, dark mode,125% text, keyboard skip link, no-store health, actual backend outage/restart/retry and404 checks, without session/inventory writes. A missing default favicon was found during MCP inspection; the legacy SVG icon is now reused by the Next app and its response is checked.
+- Playwright MCP verified mobile manager/staff preview navigation, five locations, no credential storage, no inventory inputs and no page errors. It initially observed a missing favicon404 before the SVG correction; that was an asset issue, not a business change.
+- Independent review found no additional blocking shared-package issues. The new client's default timeout was aligned to legacy20s and nullable countSheet inputs were retained before final14/14 verification. API errors never retain upstream bodies, request payloads, credentials or causes.
+- Final Web/workspace review found a test-harness dotenv fallback risk. Root reproduced it with a failing test using temporary canary files and Next's real env loader, then changed the fixture helper to set an explicit empty API origin rather than deleting it. Config/isolation4/4, typecheck/lint, complete legacy/shared suites and the production browser harness passed after the fix. Operational environment files were not edited or used as regression fixtures.
+- Root `npm test` now explicitly selects `test/*.test.mjs`; shared TS tests run via `tsx` separately. `npm run web:dev` starts the preview on port3000; `npm run web:build` / `web:start` operate from the proper workspace. See `docs/WEB_FOUNDATION.md` for installation/configuration.
+- No backend is selected by default. `BEP_API_ORIGIN` is an explicit server-only HTTPS or HTTP-loopback origin; production build/start must use the same value, with a rebuild after changes. The Next API rewrite does not replace backend authentication. The current UI calls only health and does not persist credentials.
+- No operational database was opened or modified. Initial M2 baseline is `25ac7a5`; branch `Minh/m2-web-foundation`. W02, inventory feature parity, native storage bridge and deployment remain pending separate gates.
 
 ## 7. Open issues and known risks
 
@@ -253,7 +268,7 @@ The pre-audit English handoff is available at `a8b2d0b:PROJECT_CONTEXT.md`. M0's
 ## 10. Next work and handoff
 
 1. M1 is complete: retained concurrency/cross-client/offline-draft regressions, parity/test matrix, and disposable backup/restore/schema/recovery rehearsal. No inventory behavior, live schema/data or deployment changes.
-2. Obtain approval for the concrete M2 scope: additive TypeScript contracts/API adapter and a Next.js Web foundation alongside legacy. Start with contracts before migrating count behavior; no backend/DB rewrite.
+2. The approved M2 foundation is complete. Present W02 next: Web login/logout/delegation,12h session behavior,401/403 handling, safe storage ownership and an explicit legacy-origin draft handover. No inventory forms should migrate before those boundaries are tested; no implicit cookie/BFF conversion.
 3. A separately approved RN/Expo spike must prove token/draft/pending-logout continuity, signed updates, and minimum OS before native migration. Revisit the architecture if it fails.
 4. Staging/production/signing/hosting/backup retention require separate approvals at their gates. Operational backup execution and restore have not been performed or authorized by the disposable rehearsal.
 

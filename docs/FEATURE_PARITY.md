@@ -2,6 +2,8 @@
 
 Baseline application: `a8b2d0b`. Milestone: M1. Approved architecture: option A, incremental clients with the existing Node/SQLite authority. This checklist describes current behavior to preserve; it does not approve new workflows or claim any feature has migrated.
 
+M2 update: shared contracts/client/domain and the read-only Next preview foundation are implemented and tested; this is groundwork, not operational workflow parity. See [WEB_FOUNDATION.md](WEB_FOUNDATION.md). Authentication, counts, documents, reports and draft-origin transition remain in the legacy app until their own slices are accepted.
+
 ## Evidence labels
 
 - **API tested**: the stated scenario is exercised through the real HTTP server against disposable SQLite.

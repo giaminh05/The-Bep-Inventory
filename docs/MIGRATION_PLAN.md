@@ -1,12 +1,12 @@
 # Web, Android, and iOS Migration Plan
 
-Updated: November 20, 2026 (`Asia/Bangkok`). Audit baseline: `a8b2d0b`; M1 branch base: `a04d175`. Status: **M0 and M1 complete; option A and M1 approved on November 20, 2026; M2 concrete scope approval pending; no UI rebuild implemented.**
+Updated: November 20, 2026 (`Asia/Bangkok`). Audit baseline: `a8b2d0b`; M1 base: `a04d175`; M2 base: `25ac7a5`. Status: **M0, M1 and approved M2 foundation (S01/S02/W01) complete. W02 authentication/draft-origin migration and operational inventory screens remain pending.**
 
 ## 1. Goals and boundaries
 
 Modernize the UI and code structure while preserving inventory workflows, permissions, data, formulas, and compatibility with active clients. Behavioral references are `server/`, `web/`, current tests, `PROJECT_CONTEXT.md`, and the [F01–F18 checklist](CROSS_PLATFORM_AUDIT.md#3-workflow-map-and-parity-checklist).
 
-The initial M0 phase was documentation-only. M1 now authorizes regression tests, disposable fixtures, backup/restore rehearsal tooling, and related documentation. It does not authorize removing the legacy application, production schema/data changes, dependencies, Next/Expo scaffolding or UI code, backend replacement, native sync, deployment configuration changes, or deployment. Proposed later tasks are not automatically approved by choosing option A.
+M0 was documentation-only; M1 added regression/recovery evidence. The user then approved shared TypeScript contracts/API adapter and a Next.js foundation: S01/S02/W01 are implemented beside legacy. This slice does not authorize W02 auth/session/draft-origin handover, removing legacy, inventory policy changes, production schema/data changes, backend replacement, native sync/Expo, or live deployment. Later tasks retain their own gates.
 
 ## 2. Architecture options and approved direction
 
@@ -101,12 +101,14 @@ M1 does not install Next/Expo or change schema. Exit: committed baseline tests, 
 
 ### M2 — Shared contracts and Web foundation
 
+Approved foundation evidence and run commands: [WEB_FOUNDATION.md](WEB_FOUNDATION.md). Legacy34/34, shared14/14, config/isolation4/4; typecheck/lint/build, production browser matrix and legacy browser suites passed. No operational workflow has moved to the previews.
+
 | ID / stream | Goal | Dependencies / priority | Files | Acceptance | Verification | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| S01 / shared | Additive workspace, contracts, API adapter | M1, G1, scope approval; P0 | `package.json`, `pnpm-lock.yaml`, workspace config, `packages/contracts/`, `packages/api-client/` | Legacy commands work; headers/body/errors/status compatible; schemas do not tighten business rules unintentionally | Contract tests compare payload/result/error401/403/409, unknown/null, same-key replay | Awaiting M2 scope approval; M1 complete |
-| S02 / business | Selectively share pure quantity/date/format validation | S01; P0 | `packages/domain/`, fixtures; server only through a separately necessary task | Preserve precision, case/each, Atlanta boundaries, report formula | Table/property tests against legacy; unchanged backend integration | Blocked: S01 |
-| W01 / Web | Next/TS/Tailwind/shadcn shell and design tokens | S01; P1 | `apps/web/app/`, components, config, tests | Runs beside legacy; manager/staff layout, Vietnamese, keyboard/focus/loading/errors/themes; no direct DB access | Typecheck, lint, Next build, Playwright320/390/desktop, accessibility checks | Blocked: S01 and UI scope approval |
-| W02 / Web-auth | Login/logout/delegation and legacy draft-origin handover | W01, S01; P0 | `apps/web/features/auth/`, storage adapters; legacy export/bridge only if approved | Web12h, correct 403/401; switching preserves staff tab; draft ownership; new origin cannot implicitly read old storage | Two-account/revocation/refresh/origin-transition tests, secure handling; no SSR/cache secrets | Blocked: W01 |
+| S01 / shared | Additive workspace, contracts, API adapter | M1, G1, scope approval; P0 | Root workspace/TS/scripts/lock; `packages/contracts/`, `packages/api-client/` | Legacy commands and wire values preserved; current credentials, safe statuses, exact key/payload, no retries | Ten response/transport/real API tests, typecheck, preserved legacy34/34 | Complete |
+| S02 / business | Share pure quantity/date/usage helpers selectively | S01; P0 | `packages/domain/` | Preserve precision, case/each, zero, Atlanta boundaries and nullable/negative usage; backend remains authority | Four table/legacy parity tests; typecheck; original server untouched | Complete |
+| W01 / Web | Next/TS/Tailwind shell and semantic UI primitives | S01; P1 | `apps/web/`, `scripts/verify-next-foundation.mjs`, fixture env helper, `docs/WEB_FOUNDATION.md` | Parallel Vietnamese read-only previews, responsive/navigation/themes/status/retry; explicit optional backend; tests override existing dotenv selection; no inventory reads/writes or credentials | Four config/isolation tests; typecheck/lint/build; production320/390/1440px browser matrix, dark/large-text/focus, outage/retry, icon and404; MCP | Complete as preview foundation; no operational feature parity claimed |
+| W02 / Web-auth | Login/logout/delegation and legacy draft-origin handover | W01, S01, concrete scope approval; P0 | `apps/web/features/auth/`, storage adapters; legacy export/bridge only if approved | Web12h, correct403/401; switching preserves staff tab; draft ownership; new origin cannot implicitly read old storage | Two-account/revocation/refresh/origin-transition tests, secure handling; no SSR/cache secrets | Awaiting next scope approval; S01/W01 complete |
 
 ### M3 — Web feature parity in functional slices
 
@@ -196,5 +198,6 @@ After M1, present the concrete first `apps/web` PR scope and a separate native s
 |2026-11-20|G1/G2 approval|User approved option A and M1; M1 in progress; M2+ scope, UI code, native spike, and production remain gated|
 |2026-11-20|Language correction|English repository/Git/GitHub work; Vietnamese user chat/reports|
 |2026-11-20|M1 complete|34/34 API/file-DB tests; three new browser scenarios plus smoke/UI/MCP passed; backup WAL/restore/schema/crash rehearsal on temporary files; source-sidecar safety fix verified RED/GREEN; no migrated UI or operational data changes|
+|2026-11-20|M2 foundation approval/completion|User approved shared contracts/API then Next foundation; S01/S02/W01 complete,52 automated tests across legacy/shared/config plus production/legacy browser suites; fixture dotenv isolation finding verified RED/GREEN; W02, inventory screens, native and deployment remain gated|
 
 Official sources and evidence limits are in [audit §9](CROSS_PLATFORM_AUDIT.md#9-official-technical-sources-consulted-on-november-20-2026). Reverify versions/documentation before installing anything in a later milestone.

@@ -1,0 +1,9 @@
+{
+  "name": "@bep/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": { "@bep/contracts": "workspace:*" },
+  "scripts": { "typecheck": "tsc --noEmit" }
+}

@@ -18,8 +18,9 @@
 ## Current migration authorization
 
 - On November 20, 2026, the user approved option A and M1 (G1/G2): incremental migration retaining the API/SQLite backend and legacy clients, starting with behavioral regression tests, parity evidence, and disposable-data backup/restore rehearsal.
-- M0 documentation and M1 baseline/recovery checks are complete. M1 authorized regression tests, disposable fixtures, backup/restore tooling, and related documentation. It does not authorize Next.js/Expo UI implementation, dependency installation/upgrades, application behavior changes, production schema/data changes, native project changes, or deployment configuration changes. Present the concrete M2 scope for approval before proceeding.
-- Do not scaffold Next.js/Expo, run `cap sync` or `expo prebuild`, or deploy without the applicable later approval. M2+ tasks retain their scope/dependency gates; choosing option A does not authorize every planned task.
+- M0 documentation and M1 baseline/recovery checks are complete. On November 20, 2026, the user subsequently approved M2: additive shared TypeScript contracts/API adapter, parity-tested pure helpers, and a Next.js Web foundation beside legacy (S01/S02/W01).
+- The approved M2 foundation (S01/S02/W01) is complete: workspace/dependency setup, shared packages and read-only manager/staff preview shells. It does not authorize inventory behavior changes, authentication/session/draft-origin migration (W02), inventory feature migration (M3), production schema/data changes, native project changes, or live deployment. Preview routes are not authenticated roles or operational inventory screens. Present W02's concrete scope before proceeding.
+- Do not run `cap sync` or `expo prebuild`, start the native spike, or deploy without the applicable later approval. W02/M3/native/production tasks retain their approval/dependency gates; choosing option A does not authorize every planned task.
 - Reading status and testing disposable data are permitted; do not test writes against the operational database.
 - Documentation or M1 approval does not authorize production deployment, real-data changes, or business policy changes.
 
@@ -27,7 +28,7 @@
 
 - Use Superpowers where relevant: brainstorming/architecture before major changes, writing-plans for plans, systematic-debugging for failures, TDD for behavior changes, and verification-before-completion before success claims.
 - Use subagents for independent work when useful; give each task explicit scope and write ownership, avoiding shared-file edits.
-- Apply Vercel React/Next.js best practices when React/Next.js source exists. The current application uses plain JavaScript; framework rules are not a reason to rewrite it.
+- Apply Vercel React/Next.js best practices in `apps/web/`. The operational legacy client remains plain JavaScript in `web/`; framework rules are not a reason to rewrite it or remove its workflows.
 - Apply React Native/Expo best practices after mobile migration approval, along with suitable mobile design guidance. Do not use shadcn/ui or DOM elements as native components.
 - Use Playwright MCP for relevant browser testing together with existing Playwright suites. A mocked Capacitor bridge is not native-device evidence.
 - Use suitable Android emulators/devices, ADB, and Gradle. For iOS use Xcode, Simulator/devices, or a macOS runner. Verify native lifecycle on actual signed builds before release.
@@ -59,7 +60,7 @@
 
 ## Testing and documentation
 
-- Run appropriate checks before claiming completion; report failures and unrun checks. API suite: `npm.cmd test` on Windows or `node --test`.
+- Run appropriate checks before claiming completion; report failures and unrun checks. Legacy API suite: `npm.cmd test` on Windows or `node --test test/*.test.mjs`. Shared TypeScript tests run separately with `npm run test:shared`; use `npm run typecheck`, `npm run web:lint` and `npm run web:build` for M2. Do not rely on bare Node test discovery across mixed TypeScript workspaces.
 - Browser suites: `node scripts/smoke-web.mjs`, `node scripts/verify-ui.mjs`, `node scripts/verify-parity.mjs`. Use `:memory:` or disposable fixtures, never the operational database; keep QA images in temporary storage. Backup/schema/recovery rehearsal: `node --test test/db-compatibility.test.mjs`; operational backup or restore execution still requires separate approval.
 - Regression coverage must address counts, unit conversion, stale revisions, concurrent writes, idempotency, authorization, partial receipts/transfers, counted receipts, history/Atlanta/DST, reports, and network failures.
 - New shared-logic unit tests require parity fixtures against the old implementation; add DB/API integration tests and native tests for secure storage, force-stop/reboot/update/logout.
