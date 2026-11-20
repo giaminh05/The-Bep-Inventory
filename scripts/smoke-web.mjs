@@ -239,8 +239,9 @@ try {
   await desktop.getByRole('button', { name: 'Xác nhận nhận đủ toàn bộ hàng' }).click();
   await desktop.getByText('Đã đóng · Có chênh lệch', { exact: true }).waitFor();
   await desktop.getByRole('button', { name: 'Nhật ký', exact: true }).click();
-  await desktop.getByText('Xuất chuyển', { exact: true }).first().waitFor();
-  assert.equal(await desktop.getByText('Xuất chuyển', { exact: true }).count(), 2);
+  const transferEvents = desktop.locator('.table-wrap tbody tr').filter({ hasText: 'Xuất chuyển' });
+  await transferEvents.first().waitFor();
+  assert.equal(await transferEvents.count(), 2);
   await desktop.getByRole('button', { name: 'Báo cáo tuần' }).click();
   const teaReport = desktop.getByRole('row').filter({ hasText: 'Trà xanh' });
   await teaReport.getByRole('button', { name: 'Đặt giá' }).click();
