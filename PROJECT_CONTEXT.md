@@ -12,6 +12,8 @@ M2 authorizes the scoped pnpm workspace/dependency setup, shared packages and re
 
 The user's language correction on November 20 is permanent: **English for repository/Git/GitHub work; Vietnamese for chat and user-facing reports.** Product UI remains Vietnamese.
 
+The user also requested Appllama-informed UI work on November20. Relevant skills are installed; no Appllama MCP tools were exposed in this session when checked. Future UI tasks should discover tool availability, study actual relevant screens/flows when connected, and retain research references/design decisions while preserving inventory efficiency, exact quantities and existing approval gates. Installed skills alone are not evidence that screen research was performed.
+
 Related documents:
 
 - [Permanent instructions](AGENTS.md).
