@@ -6,7 +6,7 @@ Updated November 20, 2026, using the user communication timezone `Asia/Bangkok`.
 
 The project has manager/staff Web interfaces, Android/iOS Capacitor clients, a Node.js backend, and SQLite. The user requested an audit and a migration design for modern interfaces across all three platforms while preserving all business behavior and data.
 
-**On November 20, 2026, the user approved architecture option A and M1 (G1/G2).** M0 audit/documentation is complete; **M1 is in progress**. No feature has been migrated. Option A means incremental Next.js Web migration, retaining the API/SQLite backend and operational Capacitor clients, with React Native/Expo only after native compatibility gates. Architecture direction approval is not blanket approval to execute M2+.
+**On November 20, 2026, the user approved architecture option A and M1 (G1/G2).** M0 audit/documentation and **M1 baseline/recovery checks are complete**. No feature has been migrated. Option A means incremental Next.js Web migration, retaining the API/SQLite backend and operational Capacitor clients, with React Native/Expo only after native compatibility gates. Architecture direction approval is not blanket approval to execute M2+.
 
 M1 authorizes regression tests, disposable fixtures, backup/restore rehearsal tooling, and related documentation. Next.js/Expo UI code, dependency changes, application behavior changes, production schema/data changes, native project changes, deployment configuration, and deployment remain outside current approval. Never write to the operational DB for tests.
 
@@ -18,6 +18,7 @@ Related documents:
 - [Audit, workflows, and test evidence](docs/CROSS_PLATFORM_AUDIT.md).
 - [Architecture, milestones, approval gates, and rollback](docs/MIGRATION_PLAN.md).
 - [Completed history regression plan](docs/superpowers/plans/2026-11-20-history-regression-tests.md).
+- [Feature parity and canonical fixtures](docs/FEATURE_PARITY.md), [test matrix](docs/TEST_MATRIX.md), and [backup/restore runbook](docs/BACKUP_RESTORE.md).
 
 ## 2. Operational overview and architecture
 
@@ -130,13 +131,13 @@ Audit F01–F18 includes workflow-specific evidence labels. Summary:
 | --- | --- |
 | Stock/catalog/counts/receipts/transfers/accounts/history/reports |Implemented; API/browser checks verify audit scenarios, not every physical device|
 | Concurrent counts |Implemented/verified on one server/memory DB:same revision, different keys=>200/409, one sheet|
-| Competing dispatch and idempotent receipts |Implemented/ad hoc verified:no negative stock; one receipt per same key|
+| Competing dispatch and idempotent receipts |Implemented/retained regression tests: no negative stock or orphan losing-batch rows; one receipt per same key|
 | Multi-category transaction |Partial:atomic per category, not all-or-nothing queue|
 | Cross-device sync |Shared backend/manual refresh verified; realtime push absent; all three WAN binaries unknown|
 | Offline counts |Partial:open screen can edit/save drafts; full cold startup and durable outbox/auto-sync absent|
 | Offline startup/logout auth |Implemented; browser bridge mocks pass; current physical cycle unknown|
 | Concurrent configuration edits |Transactions exist; price/threshold revision locks absent; no added conflict policy|
-| Persistence/backup/restore/HA |SQLite implementation/local artifacts exist; fresh audit had no backup/restore/crash/load rehearsal|
+| Persistence/backup/restore/HA |M1 disposable file tests verify WAL backup, restore/reopen, abrupt-exit recovery and supported legacy schema; operational backup/HA/load remain unverified|
 | Import/export/approval |One-time Sheets snapshot importer exists; not rerun; live sync/export/approval absent|
 | Native packaging |Shells exist; four common web-file hashes match current bundles; installed APK/IPA/signing/physical behavior unconfirmed|
 | Migration stack |Next.js/TypeScript/Tailwind/shadcn and RN/Expo unimplemented; option A selected but UI implementation gated|
@@ -155,7 +156,7 @@ Audit F01–F18 includes workflow-specific evidence labels. Summary:
 
 These ad hoc/MCP checks were not committed as tests during the documentation-only audit; M1 is now approved to capture regressions. PR#8 committed history coverage:optional/combined filters, Atlanta winter/summer/DST, pagination123 matching rows, cursor boundary50, validation, and staff denial. Earlier 5/5 passed with TZ=Asia/Ho_Chi_Minh, and all four mutations were caught in temporary backend copies:remove person filter, UTC dates, reverse sorting, inclusive cursor. No production source was mutated.
 
-M1 is in progress; fresh results/task completion must be recorded after its tests and rehearsal run. Do not present M0 evidence as a fresh M1 result.
+M0 evidence above is historical. Fresh M1 execution evidence is recorded separately below.
 
 ### 6.2 Historical evidence, not a latest native-build result
 
@@ -167,6 +168,20 @@ M1 is in progress; fresh results/task completion must be recorded after its test
 - Earlier ad hoc history checks covered date-only/combined, Atlanta winter/summer/DST, Vietnam locale, and 52-row bidirectional pagination; PR#8 now commits history regression coverage.
 - 4419a66 merged before tests;8efb6f4 checks came later. Do not claim those checks ran at the earlier merge.
 - README still says iOS was never run; this context records newer historical evidence. README stayed outside M0's allowlist.
+
+### 6.3 M1 completion evidence, November 20, 2026
+
+- `npm.cmd test`: **34/34 passed**: 17 original inventory, 5 history, 6 concurrency, 6 file-backed backup/schema/recovery tests.
+- `scripts/verify-parity.mjs`: **3/3 browser scenarios passed**: offline draft/reload and account/delegation isolation; partial multi-category retention after a real conflict; retry following a real server commit whose response was deliberately dropped.
+- Existing `scripts/smoke-web.mjs` and `scripts/verify-ui.mjs`: passed again against the unchanged application implementation.
+- Playwright MCP: mobile390px, Vietnam locale/timezone; offline draft27 restored, explicit count submission applied once, stock27 and one sheet, no page errors.
+- Two temporary client mutations were caught: skipping confirmed-draft cleanup and allocating a new key for an uncertain retry. Temporary source copies were removed; operational `web/` was never edited.
+- `scripts/backup-database.mjs` adds an explicit-source/fresh-destination Online Backup CLI using a read-only source, integrity/FK validation, private staging and exclusive no-clobber publication. Existing outputs, aliases, destination sidecars and source-sidecar filenames are refused. No production backup job or scheduling was enabled.
+- Backup fixtures retain committed active WAL state and exclude unfinished writes, restore to a new path, reopen, recover from child exit73, and migrate one supported original schema additively across repeated openings. No operational database was read, copied, migrated or restored.
+- Independent review found a source-sidecar destination bug in the new helper. Root added a failing regression, reproduced the issue, rejected those names (case-insensitively on Windows), then passed 6/6 DB tests and the full34/34 suite. Review of other M1 code found no additional actionable issues. This was a helper fix, not an inventory policy change.
+- [FEATURE_PARITY.md](docs/FEATURE_PARITY.md), [TEST_MATRIX.md](docs/TEST_MATRIX.md) and [BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md) retain the oracles, commands, remaining platform gates and operational limitations.
+- Source baseline for M1: merged documentation PR#9 at `a04d175`; work branch `Minh/migration-m1-baseline`. Existing `server/`, `web/`, native projects, package files and configuration remain unchanged. The pre-existing 297 staged skill assets were excluded.
+- No Next.js/Expo client, native bridge or live deployment was implemented. Physical-device signed updates, multi-process/load and actual power-loss testing remain pending. Next step: obtain approval of the concrete M2 contracts/Web-foundation scope.
 
 ## 7. Open issues and known risks
 
@@ -227,6 +242,7 @@ Configuration names:`BEP_DB`, `BEP_PORT`, `BEP_HOST`, `BEP_LIVE`, `BEP_ORIGINS`,
 |2142e27 /d3cc61c|Expanded context handoff|
 |62b9182 /d3f933f|Android test scaffolding cleanup|
 |a8b2d0b /25c5483|PR#8 five history regressions,22/22 API suite|
+|a04d175 /5ecc96e|PR#9 audit/architecture plan, English repository language policy, recorded G1/G2 approval|
 
 Repository:`https://github.com/giaminh05/The-Bep-Inventory`. At audit start, main/origin/main=`a8b2d0b`; documentation branch `Minh/cross-platform-migration-audit`.297 skill/customization files were staged before the task and excluded from migration commits. Three native files had line-ending-only changes in an earlier handoff; the fresh audit began without application/native diff. Always inspect actual status.
 
@@ -236,10 +252,9 @@ The pre-audit English handoff is available at `a8b2d0b:PROJECT_CONTEXT.md`. M0's
 
 ## 10. Next work and handoff
 
-1. Execute approved M1:committed concurrency/cross-client/offline-draft regressions, contract/parity matrix, and disposable-data backup/restore rehearsal. No schema changes or live deployment.
-2. Record fresh checks, actual task status, and remaining gaps before claiming M1 completion.
-3. After a stable M1, present concrete scope for shared TypeScript contracts/API adapter and incremental Next.js workflows; keep legacy operational. M2+ implementation requires its next scope gate.
-4. A separately approved RN/Expo spike must prove token/draft/pending-logout continuity, signed updates, and minimum OS before native migration. Revisit the architecture if it fails.
-5. Staging/production/signing/hosting/backup retention require separate approvals at their gates; they do not block disposable-data M1 work.
+1. M1 is complete: retained concurrency/cross-client/offline-draft regressions, parity/test matrix, and disposable backup/restore/schema/recovery rehearsal. No inventory behavior, live schema/data or deployment changes.
+2. Obtain approval for the concrete M2 scope: additive TypeScript contracts/API adapter and a Next.js Web foundation alongside legacy. Start with contracts before migrating count behavior; no backend/DB rewrite.
+3. A separately approved RN/Expo spike must prove token/draft/pending-logout continuity, signed updates, and minimum OS before native migration. Revisit the architecture if it fails.
+4. Staging/production/signing/hosting/backup retention require separate approvals at their gates. Operational backup execution and restore have not been performed or authorized by the disposable rehearsal.
 
 After meaningful milestones, update context/tracker and report actual files/tests/workflows/risks. Implemented does not mean verified. A merged branch is not architecture approval. Preserve source/data/permissions and use small, verified tasks.
