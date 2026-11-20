@@ -126,7 +126,9 @@ These baseline items are supported by code and README. The available chat does n
 - Staff switching had a passing 17-test API suite and Chrome smoke in the earlier session.
 - On 20 November 2026, `npm.cmd test` passed all 17 tests at `8efb6f4`.
 - On 20 November 2026, `node scripts/verify-ui.mjs` passed at `8efb6f4`, covering responsive UI, light/dark themes, enlarged text, drafts, dialogs, mobile navigation, and refresh recovery.
-- On 20 November 2026, `node scripts/smoke-web.mjs` did not complete. It timed out at line 242 because `getByText('Xuất chuyển')` matched a hidden `<option>` in the history type selector instead of a visible ledger row. This is a stale/ambiguous test locator; it does not by itself establish a product failure. Update the assertion to target visible history rows, then rerun the smoke test.
+- On 20 November 2026, the initial `node scripts/smoke-web.mjs` run timed out at line 242 because `getByText('Xuất chuyển')` matched a hidden `<option>` in the history type selector instead of a visible ledger row. The selector was changed to count matching visible history-table rows. The smoke test then passed.
+- During the 20 November cleanup, two generated Android example tests were removed. The instrumented example asserted the old Capacitor package ID and the unit example only asserted `2 + 2`; their corresponding test source metadata, test runner configuration, and JUnit/Espresso dependencies were also removed. The current Android app no longer carries these unused template checks.
+- After that cleanup, `npm.cmd test` passed 17/17, `node scripts/smoke-web.mjs` passed, `node scripts/verify-ui.mjs` passed, and Android `:app:assembleDebug` succeeded.
 - Additional temporary, in-memory checks on 20 November passed: date-only history filtering, combined history filters, Atlanta day boundaries across winter/summer and both DST changes, Vietnamese browser locale with a Vietnam device timezone, and 52 matching history rows paginated in both sort directions without gaps or duplicates. These ad hoc checks were not committed as test files.
 - The history page displays timestamps using the `vi-VN` formatting locale but explicitly fixes the timezone to `America/New_York`. The locale controls presentation, not the timezone. Date filters are inclusive Atlanta calendar days; each optional filter can be used independently and blank fields are omitted from the request.
 - The history UI distinguishes `Kiểm kê` (`count`, manager single-item adjustment), `Phiếu kiểm kê` (`sheet_count`, grouped submitted count sheet), and `Tất cả kiểm kê` (both). Keep these definitions clear in labels/help text.
@@ -142,7 +144,7 @@ Historical iOS evidence is available in [Release build run](https://github.com/g
 
 The application is a working local inventory system with web/native development flows and imported operational-data files present locally. Production deployment, distribution signing, store release, and testing on physical phones are not established by the available evidence.
 
-There is no partially written application patch in this session. The latest product changes are merged, and the focused web/API and emulator checks listed above passed. The remaining work is to repair the smoke-test locator and investigate the user's device-specific native-session report if it persists.
+There is no partially written application patch in this session. The latest product changes are merged, and the focused web/API and emulator checks listed above passed. The user's device-specific native-session report remains to be investigated if it persists.
 
 The date-only history filter was verified on the current server with test data. A stale backend process on port 4170 likely explained the earlier report. If filtering still returns out-of-range days, verify the running server's startup time/source revision and ensure the old process has stopped before retesting.
 
@@ -259,7 +261,7 @@ The user's explicit behavior choices above should be carried forward. Changes to
 | `Mo-The-Bep-Android.cmd` | Windows Android launcher |
 | `Mo-The-Bep-Web-Android.cmd` | Combined demo launcher |
 | `test/inventory.test.mjs` | HTTP regression tests against disposable in-memory SQLite |
-| `scripts/smoke-web.mjs` | Inventory/browser integration smoke, session bridge mocks, account switching; currently has an ambiguous hidden-option locator at its history assertion |
+| `scripts/smoke-web.mjs` | Inventory/browser integration smoke, session bridge mocks, account switching |
 | `scripts/verify-ui.mjs` | Responsive/theme/large-text/draft/dialog feedback checks with temporary screenshots |
 | `capacitor.config.json` | App identity, `dist/` web directory, logging policy |
 | `android/`, `ios/` | Native wrappers and platform build configuration |
@@ -347,12 +349,11 @@ This section intentionally records names only. Obtain actual deployment configur
 
 ### Immediate outstanding work
 
-1. Fix `scripts/smoke-web.mjs` around line 242 so the history assertion selects visible ledger rows rather than the hidden “Xuất chuyển” `<option>`, then rerun the smoke test and adjust any further stale expectations.
-2. If the user still sees lost login on their own Android/iOS device, obtain device/platform/OS, app build/install method, account role, whether it was uninstalled or only swiped/force-stopped, and whether manager reset that password. Reproduce on that device/build. The emulator's native staff token survived force-stop/relaunch; that does not prove the user's build/device follows the same path.
-3. Confirm the latest native package is loading the intended backend origin and current web assets. The Android emulator test used the local debug build and backend; physical Android and current iOS lifecycle behavior remain unverified in this cycle.
-4. If the history date symptom recurs, verify which process owns port 4170 and restart the Node server after code changes. A second `npm.cmd start` fails with `EADDRINUSE` while an old process is listening; the newly opened browser can otherwise talk to stale backend code.
-5. Add committed regression tests for history optional/combined filters, Atlanta date boundaries and pagination. The broader behaviors passed temporary fixtures, but the ad hoc harness is not part of the repository.
-6. Preserve and inspect the existing native-file modifications and untracked `.agents/` / `skills-lock.json` before any Git operation; stage only explicitly intended files.
+1. If the user still sees lost login on their own Android/iOS device, obtain device/platform/OS, app build/install method, account role, whether it was uninstalled or only swiped/force-stopped, and whether manager reset that password. Reproduce on that device/build. The emulator's native staff token survived force-stop/relaunch; that does not prove the user's build/device follows the same path.
+2. Confirm the latest native package is loading the intended backend origin and current web assets. The Android emulator test used the local debug build and backend; physical Android and current iOS lifecycle behavior remain unverified in this cycle.
+3. If the history date symptom recurs, verify which process owns port 4170 and restart the Node server after code changes. A second `npm.cmd start` fails with `EADDRINUSE` while an old process is listening; the newly opened browser can otherwise talk to stale backend code.
+4. Add committed regression tests for history optional/combined filters, Atlanta date boundaries and pagination. The broader behaviors passed temporary fixtures, but the ad hoc harness is not part of the repository.
+5. Preserve and inspect the existing native-file modifications and untracked `.agents/` / `skills-lock.json` before any Git operation; stage only explicitly intended files.
 
 ### Remaining release work with incomplete evidence
 
@@ -402,11 +403,10 @@ The connected GitHub tool previously returned integration-permission errors for 
 
 | Priority | Recommended action | Reason |
 | --- | --- | --- |
-| 1 | Repair the history assertion in `scripts/smoke-web.mjs` and rerun it | The current smoke test stops on a hidden-option locator before completing |
-| 2 | Reproduce the reported native session loss on the user's actual device/build if it persists | The API 36 emulator passed, but the user's device report is still open |
-| 3 | Add committed tests for optional history filters, Atlanta date boundaries, and pagination | Current focused coverage was temporary and is not retained in the test suite |
-| 4 | Verify native bundle freshness and current platform builds before distribution | Later web/backend changes postdate some historical native verification |
-| 5 | Clarify production configuration/signing only when deployment work is requested | The production target and signed release process remain unknown |
+| 1 | Reproduce the reported native session loss on the user's actual device/build if it persists | The API 36 emulator passed, but the user's device report is still open |
+| 2 | Add committed tests for optional history filters, Atlanta date boundaries, and pagination | Current focused coverage was temporary and is not retained in the test suite |
+| 3 | Verify native bundle freshness and current platform builds before distribution | Later web/backend changes postdate some historical native verification |
+| 4 | Clarify production configuration/signing only when deployment work is requested | The production target and signed release process remain unknown |
 
 This roadmap prioritizes verification and continuity. It does not approve new product features, production data changes, or deployment.
 
@@ -414,7 +414,7 @@ This roadmap prioritizes verification and continuity. It does not approve new pr
 
 The latest application commit is merged `8efb6f4` (PR #7). It preserves the staff page on account switching, shares the count performer across categories, and adds actual-performer history filters. The implementation is in `web/app.js`, `web/view.js`, `server/http.mjs`, and `server/inventory.mjs`.
 
-Most recent QA on that commit: 17/17 API tests and `scripts/verify-ui.mjs` passed. Focused ad hoc history checks covered independent date filtering, Atlanta/DST boundaries, timezone independence from the device, combined criteria, and >50-row pagination. The full `scripts/smoke-web.mjs` still fails at an ambiguous hidden-option locator around line 242. Android native staff login was verified on the API 36 emulator to survive force-stop/cold relaunch with the same secure token. The user's separate device report remains open until reproduced on their device. See section 3 for exact evidence and section 6 for actionable tasks.
+Most recent QA on that commit and subsequent cleanup: 17/17 API tests, `scripts/verify-ui.mjs`, `scripts/smoke-web.mjs`, and Android `:app:assembleDebug` passed. Focused ad hoc history checks covered independent date filtering, Atlanta/DST boundaries, timezone independence from the device, combined criteria, and >50-row pagination. Android native staff login was verified on the API 36 emulator to survive force-stop/cold relaunch with the same secure token. The user's separate device report remains open until reproduced on their device. See section 3 for exact evidence and section 6 for actionable tasks.
 
 The prior date-filter complaint likely involved a stale backend process: current UI and current backend passed 19-Nov-only filtering, while the port-4170 listener at the time predated the backend filter change. Restart the backend after changes; do not start a second server on an occupied port.
 
