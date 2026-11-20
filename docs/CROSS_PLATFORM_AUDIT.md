@@ -1,5 +1,7 @@
 # Cross-Platform System Audit
 
+This document preserves the M0 legacy baseline. Subsequent M1 checks and the M2 shared packages/Next preview are additive; see [WEB_FOUNDATION.md](WEB_FOUNDATION.md) and the current context/tracker for their implementation and fresh evidence. The operational client/backend/native source described below remains unchanged.
+
 Audit date: November 20, 2026, communication timezone `Asia/Bangkok`. Baseline: `a8b2d0b` (PR#8). Documentation branch: `Minh/cross-platform-migration-audit`.
 
 This document preserves the M0 audit results below. Subsequent approval on November 20 selected option A and M1 (G1/G2); M1 is in progress. This does not turn historical audit evidence into fresh M1 verification or approve Next.js/Expo UI implementation/production changes.

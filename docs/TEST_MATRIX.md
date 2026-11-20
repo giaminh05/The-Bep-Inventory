@@ -1,12 +1,16 @@
 # Regression test matrix
 
-M1 baseline; last reviewed2026-11-20. Repository/Git text uses English; application labels in tests remain Vietnamese. All commands below use disposable fixtures and must not be redirected to operational databases.
+M1 baseline and additive M2 foundation; last reviewed2026-11-20. Repository/Git text uses English; application labels in tests remain Vietnamese. All commands below use disposable fixtures and must not be redirected to operational databases.
 
 ## Retained automated checks
 
 | Layer / command | Coverage | Expected evidence | Limits |
 | --- | --- | --- | --- |
-| `npm.cmd test` (Windows) / `node --test` | Inventory API, history, concurrency, file-backed backup/restore/schema recovery | All discovered tests pass; exact count recorded in the context after the run | HTTP concurrency is one synchronous backend process; does not prove multi-writer HA |
+| `npm.cmd test` (Windows) / `node --test test/*.test.mjs` | Inventory API, history, concurrency, file-backed backup/restore/schema recovery |34/34 tests pass; shared TS tests run separately | HTTP concurrency is one synchronous backend process; does not prove multi-writer HA |
+| `npm run test:shared` | Typed wire schemas, transport/error/key behavior, real API role/document/status fixtures and quantity/Atlanta/usage parity |14/14 tests pass | No client credential persistence or replacement backend; helpers do not select report count boundaries |
+| `npm run test:web-config` | Explicit origin, loopback/HTTPS syntax, rejected paths/credentials, isolated fixture environment overriding actual Next dotenv files |4/4 tests pass | Not a production endpoint/hosting authorization |
+| `npm run typecheck`, `npm run web:lint`, `npm run web:build` | Shared TypeScript packages and Next preview | All pass; production routes generated | Build-time backend selection requires a rebuild after changes |
+| `npm run test:web-foundation` | Real unconfigured/configured builds, preview navigation320/390/1440px, dark/large text/keyboard/icon, actual health outage/retry/no-store and404 | Browser harness passes; no sessions or stock writes | Builds use disposable origins and OS-temp screenshots; rebuild for the intended environment before manual production start |
 | `node --test test/concurrency.test.mjs` | Six count/dispatch/receipt/category/count-linkage regressions | 200/409 outcomes plus stock, revision, document, ledger and idempotency assertions | Memory SQLite, not durability |
 | `node --test test/history.test.mjs` | Five filter/Atlanta/DST/pagination/validation/authorization regressions | Exact IDs/cursors and attribution | Browser date rendering is separately checked |
 | `node --test test/db-compatibility.test.mjs` | Online backup with active WAL, fresh-output safety, restore/reopen, supported old schema and hard-exit recovery | SQLite integrity/FK checks and canonical data reconciliation | Temporary files; not production backup certification or disk/power-loss testing |
@@ -24,7 +28,7 @@ Browser scripts use installed Playwright/Chromium. Existing overrides: `BEP_PLAY
 | Current desktop/mobile browser | API+smoke/UI | API+smoke/parity | API+smoke/parity | Open-form draft tests; no cold-start offline inventory | Legacy baseline only |
 | Current Android Capacitor | Shared source, physical acceptance pending | Historical emulator storage/lifecycle checks only | Shared server checks, physical pending | Native bridge mock in browser; physical current build pending | Not signed off for replacement |
 | Current iOS Capacitor | Shared source, physical acceptance pending | Historical macOS/Simulator checks only | Shared server checks, physical pending | Native bridge mock in browser; physical current build pending | Not signed off for replacement |
-| New Next.js Web | Pending | Pending | Pending | Pending legacy-origin draft transition | No client implemented |
+| New Next.js Web | Read-only layout preview | Read-only layout preview | Pending | Pending legacy-origin draft transition | Foundation built/tested; authentication and operational workflow sign-off pending |
 | New Android RN/Expo | Pending G3 | Pending G3 | Pending G3 | Token/draft/tombstone upgrade and rollback tests required | No client implemented |
 | New iOS RN/Expo | Pending G3 | Pending G3 | Pending G3 | Keychain/draft/signed-update compatibility required | No client implemented |
 
